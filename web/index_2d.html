@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AL · 2D 地图与门前巡检</title>
+  <link rel="stylesheet" href="/static/al_2d.css?v=20261028rb1">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><strong>AL · Nav2 + Door</strong><span>2D 地图 · BL 配置独立副本</span></div>
+    <div class="top-state"><span id="map-badge">等待地图</span><span id="sensor-badge">等待雷达</span><span id="state-pill">连接中</span></div>
+  </header>
+  <div class="workflow">蓝点：到达 → 下一点　｜　红点：到达 / 停稳 → 门全开 → 下一点　｜　实时模式：选点 → 确认执行，不保存 YAML</div>
+  <main>
+    <section class="viewer-card" aria-label="二维导航地图">
+      <div class="viewer-toolbar">
+        <strong id="map-title">2D 占据地图</strong>
+        <div class="layer-controls">
+          <label><input type="checkbox" id="show-map" checked> 地图</label>
+          <label><input type="checkbox" id="show-live"> 雷达投影</label>
+          <label><input type="checkbox" id="show-global" checked> 全局路径</label>
+          <label><input type="checkbox" id="show-local" checked> 局部路径</label>
+          <label><input type="checkbox" id="show-grid"> 米制网格</label>
+        </div>
+      </div>
+      <div class="map-tools" aria-label="2D 地图工具">
+        <button id="map-pan" class="secondary" aria-pressed="true">平移 / 选择</button>
+        <button id="map-pick">选取路径点</button>
+        <button id="map-initial" class="secondary">选取定位参考点</button>
+        <button id="map-measure" class="secondary">测距</button>
+        <button id="fit-map" class="secondary">整张地图</button>
+        <button id="reset-view" class="secondary">当前位置</button>
+        <button id="follow-view" class="secondary" aria-pressed="false">跟随：关</button>
+        <button id="zoom-in" class="secondary" aria-label="放大地图">＋</button>
+        <button id="zoom-out" class="secondary" aria-label="缩小地图">−</button>
+      </div>
+      <div id="viewer">
+        <canvas id="map-canvas" tabindex="0" aria-label="二维地图：点击选取路径点，拖动设置朝向；普通模式拖动平移，滚轮缩放"></canvas>
+        <div id="map-mode" class="map-overlay">平移 / 选择 · 不发送运动指令</div>
+        <div id="map-coordinates" class="map-coordinates">map · +X 向右 / +Y 向上</div>
+      </div>
+      <div class="legend"><span><i class="occupied"></i>占据</span><span><i class="free"></i>空闲</span><span><i class="unknown"></i>未知</span><span class="robot-key">● 机器人 / 朝向</span><span class="global-key">━ 全局路径</span><span class="local-key">━ 局部轨迹</span><span class="point-blue">● 普通点</span><span class="point-red">● 门检测点</span></div>
+      <div class="viewer-footer"><strong id="pose">等待 map → base_link</strong><span id="ages">等待实时数据</span></div>
+      <p class="viewer-help">滚轮缩放 · 拖动平移 · 选点模式：点击设置位置，按住拖动同时设置 Yaw · 右键拖动始终平移 · Esc 退出工具。选点只修改草稿，不会直接执行。</p>
+    </section>
+    <aside class="controls">
+      <div class="info-card" style="margin:10px">
+        <div class="row"><strong>原生 RGB 录像</strong><button id="rgb-record-start">开始录像</button><button id="rgb-record-stop" class="secondary" disabled>停止并传回本机</button></div>
+        <p id="rgb-record-status" role="status">等待相机录像模块</p>
+        <a id="rgb-record-download" hidden>下载录像</a>
+        <small>原生分辨率 · MP4 / H.264 · 无文字叠加 · 手动启停</small>
+      </div>
+      <nav class="tabs" aria-label="操作页面">
+        <button class="tab" data-tab="overview">总览</button><button class="tab" data-tab="localization">定位</button><button class="tab active" data-tab="patrol">巡检任务</button><button class="tab" data-tab="realtime">实时模式</button>
+      </nav>
+      <div class="tab-pages">
+        <section class="tab-page" id="tab-overview">
+          <h2>系统总览</h2><div id="checks" class="checks"></div>
+          <div class="info-card"><h3>当前流程</h3><p id="next-step"></p></div>
+          <div class="info-card"><h3>AL 原生导航参数</h3><p id="caps-summary"></p></div>
+          <div class="info-card"><h3>地图显示</h3><p>直接使用 AL 的 hkclr_office 2D 地图及其分辨率、原点和旋转，不把 3D 点云当作地图。机器人位置来自 map → base_link，轮廓来自 AL 的 Nav2 footprint。</p><p>参考 BL RViz 的 StaticMap、GlobalPlan、MPPI Optimal Trajectory、Polygon 和 2D 取点方式。这里只显示和编辑，导航与门检测仍由原 manager 控制。</p></div>
+          <div class="info-card"><h3>操作记录</h3><div id="event-log"></div></div>
+        </section>
+        <section class="tab-page" id="tab-localization">
+          <h2>参考位姿 → 雷达地图定位</h2>
+          <p class="hint">点击地图设置大致位置，拖动设置大致朝向，也可直接输入。点击“以参考位姿开始定位”后，先重启 FAST-LIO，等待新里程计与点云，再由原 VGICP 模块进行粗配准、精配准。参考位姿只是搜索初值，不是最终定位结果，不发布导航目标。</p>
+          <div class="grid-two">
+            <label>X / m<input type="number" step=".01" id="seed-x" value="0"></label>
+            <label>Y / m<input type="number" step=".01" id="seed-y" value="0"></label>
+            <label>Z / m<input type="number" step=".01" id="seed-z" value="0"></label>
+            <label>Yaw / rad<input type="number" step=".01" id="seed-yaw" value="0"></label>
+          </div>
+          <div class="row"><button id="seed-current" class="secondary">填入当前位姿作为参考</button><button id="relocalize">以参考位姿开始定位</button></div>
+          <div class="info-card"><h3>原定位模块状态</h3><p id="localization-progress"></p><p id="localization-alignment"></p><h3>匹配后的实时位姿</h3><p id="localization-state"></p></div>
+        </section>
+        <section class="tab-page active" id="tab-patrol"></section>
+        <section class="tab-page" id="tab-realtime"></section>
+      </div>
+      <div class="control-footer"><div id="message" role="status">正在读取状态…</div><button id="stop" class="secondary wide">取消 manager 任务</button><small>取消通过 manager → Nav2 完成，不替代底盘硬件急停。</small></div>
+    </aside>
+  </main>
+  <script type="module" src="/static/al_app_2d.js?v=20261029rgb1"></script>
+</body>
+</html>

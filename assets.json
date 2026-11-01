@@ -1,0 +1,11 @@
+{
+  "repository": "cicaburnwood-crypto/General-Lio-Navigation-Framework",
+  "release": "v2026.11.01",
+  "files": [
+    {
+      "asset": "door_epoch11.onnx",
+      "path": "src/door_opening_server/models/door_epoch11.onnx",
+      "sha256": "92bc0bbbe2cfacee97d8fbf272302cf6e161ea43e578ba9db32a0fa2190ca7a1"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+# AMCL 参数。详见 framework.md §5.2。
+# 双舵轮支持横向移动，运动模型用 OmniMotionModel。
+
+amcl:
+  ros__parameters:
+    # frame
+    base_frame_id: base_link
+    odom_frame_id: odom
+    global_frame_id: map
+    scan_topic: scan
+    transform_tolerance: 0.5
+
+    # 粒子（先按 §5.2 的建议起步，根据 CPU 调）
+    min_particles: 500
+    max_particles: 2000
+    pf_err: 0.05
+    pf_z: 0.99
+
+    # 观测模型
+    laser_model_type: likelihood_field
+    laser_max_range: 40.0
+    laser_min_range: 0.3
+    max_beams: 60
+    z_hit: 0.5
+    z_short: 0.05
+    z_max: 0.05
+    z_rand: 0.5
+    sigma_hit: 0.2
+
+    # 运动模型：双舵轮可全向，用 omni
+    robot_model_type: nav2_amcl::OmniMotionModel
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    alpha5: 0.2
+
+    # 更新阈值：移动够大才更新粒子，避免静止抖动
+    update_min_d: 0.1
+    update_min_a: 0.2
+
+    resample_interval: 1
+    recovery_alpha_slow: 0.0
+    recovery_alpha_fast: 0.0
+
+    # 初始位姿：留给 /initialpose 注入；启动后 RViz 设置或外部 service
+    set_initial_pose: false
+    always_reset_initial_pose: false
+    first_map_only: false

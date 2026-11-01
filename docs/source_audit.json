@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-01",
+  "onboard_available": false,
+  "reference": "2026-10-28 onboard BL SHA256 manifest",
+  "matching_files": 366,
+  "different_files": [
+    "src/FAST_LIO/config/mid360_filtered.yaml",
+    "src/FAST_LIO/launch/mapping.launch.py",
+    "src/bringup/maps/hkclr_office/2D/hkclr_office_2d.pgm",
+    "src/bringup/maps/hkclr_office/3D/map.pcd",
+    "src/livox_ros_driver2/config/MID360_config.json",
+    "src/navigation/config/nav2.yaml",
+    "src/navigation/config/nav2_mppi_loose_yaw.yaml"
+  ],
+  "base_commit": "49311d81018d4d4b7667b5ea1d150e2ba7f2bcaf",
+  "livox_commit": "21445540f0d100dc86a7e6df312dd70bbdb4afdf",
+  "fastlio_commit": "2fffc570a25d0df172720bac034fbdb6a13d2162",
+  "limitations": "AL overlay and maps from developer-PC deployment snapshots; live onboard mission and post-snapshot edits not retrieved.",
+  "prepared_template": "Blank waypoints; last-recorded door settings 0.1/0.1/1.0; not copied from live onboard mission"
+}

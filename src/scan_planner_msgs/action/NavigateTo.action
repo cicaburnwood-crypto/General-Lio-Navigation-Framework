@@ -1,0 +1,37 @@
+# Goal：目标位置、容差、超时
+geometry_msgs/PointStamped target  # Z 已按 /Odometry_base.z - 0.3 准备；规划端原样使用，不能再次减偏移
+float64 xy_tolerance
+float64 z_tolerance
+float64 timeout_sec
+---
+# Result：错误码、原因、最终位姿
+uint16 ERROR_NONE=0
+uint16 ERROR_NOT_READY=1
+uint16 ERROR_ACTIVATION_FAILED=2
+uint16 ERROR_GLOBAL_PLAN_FAILED=3
+uint16 ERROR_LOCAL_PLAN_FAILED=4
+uint16 ERROR_TASK_TIMEOUT=5
+uint16 ERROR_STOP_FAILED=6
+uint16 ERROR_NO_PROGRESS=7
+
+uint16 error_code
+string error_reason
+geometry_msgs/PointStamped final_position  # 实际 base 位姿，不减高度
+---
+# Feedback：阶段、位姿、距离、诊断
+uint8 PHASE_UNKNOWN=0
+uint8 PHASE_PREPARING=1
+uint8 PHASE_GLOBAL_PLANNING=2
+uint8 PHASE_LOCAL_PLANNING=3
+uint8 PHASE_EXECUTING=4
+uint8 PHASE_STOPPING=5
+
+uint8 phase
+
+geometry_msgs/PointStamped current_position  # 实际 base 位姿，不减高度
+bool has_odometry  # has_odometry=false 时当前位置和距离不可用于判断；has_odometry=true 只代表收到过位姿。
+float64 remaining_path_length
+bool path_progress_valid
+float64 xy_distance
+float64 z_distance  # abs((odom_base.z - 0.3) - target.z)
+string diagnostic_message

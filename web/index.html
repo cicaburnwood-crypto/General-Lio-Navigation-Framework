@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AL · 门检测与导航</title>
+  <link rel="stylesheet" href="/static/app.css?v=20260924e">
+  <link rel="stylesheet" href="/static/app-2k.css?v=20260924b">
+  <link rel="stylesheet" href="/static/door.css?v=1">
+  <link rel="stylesheet" href="/static/patrol.css?v=20261026a">
+  <script type="importmap">{"imports":{"three":"/static/vendor/three.module.js"}}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><strong>AL · Nav2 + Door</strong><span>BL 配置独立副本</span></div>
+    <div class="top-state"><span id="map-badge">未选择地图</span><span id="sensor-badge">雷达连接中</span><span id="state-pill">连接中</span><div class="record-controls"><button id="record-toggle" type="button" title="只录制 MID-360S 点云与 IMU 的 ROS bag；再次点击停止">● 开始录制</button><small id="record-state">未录制</small></div></div>
+  </header>
+  <div class="workflow" aria-label="工作流程">
+    <span>① 门前点 / 朝向</span><span class="arrow">→</span>
+    <span>② 到达 / 停稳</span><span class="arrow">→</span>
+    <span>③ RGB 全开检测</span><span class="arrow">→</span>
+    <span>④ manager 发布下一点</span>
+  </div>
+  <main>
+    <section class="viewer-card" aria-label="三维地图">
+      <div class="viewer-toolbar">
+        <div class="viewer-toolbar-left"><button id="guide-launch" type="button" class="guide-launch" aria-controls="guide" aria-expanded="false">启动新手教程</button><span id="cloud-label">点云等待中</span></div>
+        <div class="layer-controls">
+          <label><input type="checkbox" id="show-map" checked> 地图</label>
+          <label><input type="checkbox" id="show-live" checked> 实时</label>
+          <label><input type="checkbox" id="show-global" checked> 全局路径</label>
+          <label><input type="checkbox" id="show-local" checked> 局部路径</label>
+        </div>
+      </div>
+      <div class="viewer-workspace">
+      <section id="mapping-rgb" class="mapping-rgb" aria-label="建图 RGB 实时画面" hidden>
+        <div class="mapping-rgb-head"><strong>RGB 实时画面</strong><span id="rgb-state">等待彩色相机</span></div>
+        <img id="mapping-rgb-image" alt="D435i 彩色相机实时画面">
+        <p>仅显示 RGB，不读取深度。切离建图页面后自动释放画面连接。</p>
+      </section>
+      <div id="viewer">
+        <div class="view-controls" aria-label="六自由度预览视角控制">
+          <div class="view-controls-head">
+            <div><strong>6DOF 视角</strong><small>仅改变预览，不移动机器人</small></div>
+            <button id="reset-view" type="button" title="以机器人位姿为中心；无位姿时回地图原点">复位视角</button>
+          </div>
+          <button id="follow-view" class="follow-view" type="button" aria-pressed="false" title="导航启动后默认跟随；点击可临时自由查看地图">跟随机器人：关</button>
+          <svg id="view-axis-gizmo" viewBox="0 0 96 96" role="img" aria-label="地图 X、Y、Z 坐标轴；点击轴端正视，按住拖动连续旋转视角">
+            <circle class="gizmo-disc" cx="48" cy="48" r="41"></circle>
+            <circle class="gizmo-origin" cx="48" cy="48" r="3"></circle>
+            <g class="gizmo-axis axis-x" data-view-axis="x" role="button" tabindex="0" aria-label="沿地图 X 轴观察">
+              <line x1="48" y1="48" x2="76" y2="62"></line><circle cx="76" cy="62" r="11"></circle><text x="76" y="62">X</text>
+            </g>
+            <g class="gizmo-axis axis-y" data-view-axis="y" role="button" tabindex="0" aria-label="沿地图 Y 轴观察">
+              <line x1="48" y1="48" x2="22" y2="64"></line><circle cx="22" cy="64" r="11"></circle><text x="22" y="64">Y</text>
+            </g>
+            <g class="gizmo-axis axis-z" data-view-axis="z" role="button" tabindex="0" aria-label="沿地图 Z 轴俯视">
+              <line x1="48" y1="48" x2="48" y2="14"></line><circle cx="48" cy="14" r="11"></circle><text x="48" y="14">Z</text>
+            </g>
+          </svg>
+          <div class="view-dof-rows" aria-label="平移和旋转步进控制">
+            <div class="view-dof-row"><span data-view-drag-axis="x" title="按住并拖动，连续沿地图 X 平移">X 平移</span><button data-view-shift="x:-1" aria-label="沿地图 X 负方向平移视角">−</button><button data-view-shift="x:1" aria-label="沿地图 X 正方向平移视角">＋</button></div>
+            <div class="view-dof-row"><span data-view-drag-axis="y" title="按住并拖动，连续沿地图 Y 平移">Y 平移</span><button data-view-shift="y:-1" aria-label="沿地图 Y 负方向平移视角">−</button><button data-view-shift="y:1" aria-label="沿地图 Y 正方向平移视角">＋</button></div>
+            <div class="view-dof-row"><span data-view-drag-axis="z" title="按住并向上或下拖动，连续沿地图 Z 平移">Z 平移</span><button data-view-shift="z:-1" aria-label="沿地图 Z 负方向平移视角">−</button><button data-view-shift="z:1" aria-label="沿地图 Z 正方向平移视角">＋</button></div>
+            <div class="view-dof-row"><span>Roll</span><button data-view-turn="roll:-1" aria-label="视角向负 Roll 旋转">−</button><button data-view-turn="roll:1" aria-label="视角向正 Roll 旋转">＋</button></div>
+            <div class="view-dof-row"><span>Pitch</span><button data-view-turn="pitch:-1" aria-label="视角向负 Pitch 旋转">−</button><button data-view-turn="pitch:1" aria-label="视角向正 Pitch 旋转">＋</button></div>
+            <div class="view-dof-row"><span>Yaw</span><button data-view-turn="yaw:-1" aria-label="视角向负 Yaw 旋转">−</button><button data-view-turn="yaw:1" aria-label="视角向正 Yaw 旋转">＋</button></div>
+          </div>
+          <small id="view-step">按住 XYZ 拖动可连续调整 · 点击 ± 步进</small>
+        </div>
+      </div>
+      </div>
+      <div class="viewer-footer">
+        <span id="pose">位姿 --</span><span id="ages">雷达 -- · IMU -- · 定位 --</span>
+      </div>
+      <p class="viewer-help">导航启动后默认以机器人为中心跟随；可用左上按钮暂停跟随 · 左键旋转 · 滚轮缩放 · Shift＋左键平移 · 在巡检任务页开启地图取点后点击地面</p>
+    </section>
+    <aside class="controls">
+      <nav class="tabs" aria-label="操作页面">
+        <button class="tab active" data-tab="overview">总览</button>
+        <button class="tab" data-tab="mapping">建图 / 手操</button>
+        <button class="tab" data-tab="terrain">地形图</button>
+        <button class="tab" data-tab="localization">定位</button>
+        <button class="tab" data-tab="navigation">导航</button>
+        <button class="tab" data-tab="patrol">巡检任务</button>
+        <button class="tab" data-tab="settings">参数</button>
+      </nav>
+      <section id="guide" class="guide" aria-label="从建图到自主导航的交互式新手教程" hidden>
+        <div class="guide-top"><span id="guide-progress">步骤 1 / 17</span><div><button id="guide-restart" type="button" title="从第一步重新开始">从头</button><button id="guide-close" type="button" aria-label="关闭教程">×</button></div></div>
+        <h2 id="guide-title">新手教程</h2>
+        <p id="guide-instructions"></p>
+        <div id="guide-status" class="guide-status" role="status"></div>
+        <label id="guide-confirm-row" class="guide-confirm" hidden><input type="checkbox" id="guide-confirm"> 我已亲自在现场完成本步检查</label>
+        <div class="guide-actions"><button id="guide-prev" type="button">上一步</button><button id="guide-locate" type="button">定位操作</button><button id="guide-next" type="button">下一步</button></div>
+        <div class="guide-meter"><span id="guide-meter-fill"></span></div>
+        <p class="guide-caution">教程仅导航页面并核对状态；不会自动使能底盘或发送运动指令。</p>
+      </section>
+      <div class="tab-pages">
+        <section class="tab-page active" id="tab-overview">
+          <h2>系统总览</h2>
+          <div id="checks" class="checks"></div>
+          <div class="info-card"><h3>当前流程</h3><p id="next-step">正在读取系统状态…</p></div>
+          <div class="info-card"><h3>当前参数</h3><div id="caps-summary"></div></div>
+          <div class="info-card"><h3>操作记录</h3><div id="event-log" class="event-log"></div></div>
+        </section>
+
+        <section class="tab-page" id="tab-mapping">
+          <h2>建图与麦轮手操</h2>
+          <p class="hint">先创建或选择地图，再启动 FAST-LIO。按住按钮或 WASDQE 移动；松键、切离页面或断流会停车。</p>
+          <div class="mapping-columns">
+          <div class="mapping-setup">
+          <label>新地图名称<input id="new-map" placeholder="例如 lab_floor_01" autocomplete="off"></label>
+          <div class="row"><button id="create-map">创建地图</button><button id="select-map" class="secondary">选择下方地图</button></div>
+          <label>已有地图<select id="map-select"><option value="">选择地图</option></select></label>
+          <div class="row"><button id="start-mapping">启动建图</button><button id="save-map">保存 PCD 与瓦片</button></div>
+          <div class="info-card" id="mapping-waypoint-card"><h3>建图时记录导航路径点</h3><p class="hint">把机器人当前 world 坐标记录为顺序目标点；Z 自动换算到地面。每次点击立即写入当前地图的 waypoints.yaml，导航页会直接载入。</p><button id="record-waypoint" class="wide" type="button">记录当前位置为路径点</button><p id="mapping-waypoint-state">当前地图尚无已记录的路径点。</p><div id="mapping-waypoint-list" class="mapping-waypoint-list"></div></div>
+          </div>
+          <div class="mapping-drive">
+          <div class="row"><button id="manual-arm" class="amber">启用手操</button><button id="manual-disarm" class="secondary">关闭手操</button></div>
+          <div class="slider-row"><label for="manual-linear">前后最高线速度 <output id="linear-value">0.40 m/s</output></label><input type="range" id="manual-linear" min="0" max="1" step="0.01" value="0.4"></div>
+          <div class="slider-row"><label for="manual-lateral">横移最高线速度 <output id="lateral-value">0.20 m/s</output></label><input type="range" id="manual-lateral" min="0" max="1" step="0.01" value="0.2"></div>
+          <div class="slider-row"><label for="manual-yaw">最高角速度 <output id="yaw-value">0.50 rad/s</output></label><input type="range" id="manual-yaw" min="0" max="1" step="0.01" value="0.5"></div>
+          <div class="drive-keyboard" aria-label="WASDQE 操纵按钮">
+            <button data-key="q">Q <small>左移</small></button><button data-key="w">W <small>前进</small></button><button data-key="e">E <small>右移</small></button>
+            <button data-key="a">A <small>左转</small></button><button data-key="s">S <small>后退</small></button><button data-key="d">D <small>右转</small></button>
+          </div>
+          <div class="info-card"><h3>手操指令</h3><p id="drive-readout">未使能 · vx 0 · vy 0 · wz 0</p><p class="hint">W/S 前后，Q/E 左右平移，A/D 原地转向；可组合按键，平面总速度不超过 1 m/s。</p></div>
+          </div>
+          </div>
+        </section>
+
+        <section class="tab-page" id="tab-terrain">
+          <h2>CUDA 地形图</h2>
+          <p class="hint">上游 PCT 必须先将已保存的 PCD 转换为 tomogram。本机 5070 Laptop GPU 是默认计算设备；任务完成后自动回传主控。</p>
+          <div id="terrain-state" class="info-card">等待地图</div>
+          <div class="row"><button id="build-terrain">在本机 5070 生成地形图</button></div>
+          <a class="inspect-link" href="/static/tomogram_inspector.html" target="_blank" rel="noopener">打开 LAB6 · 5 cm Tomogram 格子检查器 ↗</a>
+          <p class="hint">建图结束并停止建图任务后再生成。地图或车辆/地形参数改变会使旧 tomogram 过期，需重新生成。</p>
+          <div class="info-card"><h3>计算日志</h3><p id="terrain-error">暂无任务</p></div>
+        </section>
+
+        <section class="tab-page" id="tab-localization">
+          <h2>重定位与定位</h2>
+          <p class="hint">先在终端启动副本的 Nav2 / VGICP；此处只发布 /initialpose，不会启动运动。</p>
+          <div class="grid-two">
+            <label>X / m<input type="number" step="0.1" id="seed-x" value="0"></label>
+            <label>Y / m<input type="number" step="0.1" id="seed-y" value="0"></label>
+            <label>Z / m<input type="number" step="0.1" id="seed-z" value="0"></label>
+            <label>Yaw / rad<input type="number" step="0.1" id="seed-yaw" value="0"></label>
+          </div>
+          <div class="row"><button id="relocalize">发布初始位姿</button><button id="localization" hidden>启动实时定位</button></div>
+          <div class="info-card"><h3>重定位结果</h3><p id="pose-file-status" role="status" aria-live="polite">尚未生成本次 pose.txt</p><p id="pose-file-detail" class="hint"></p><h3>实时定位</h3><p id="localization-state">等待地图和雷达</p></div>
+        </section>
+
+        <section class="tab-page" id="tab-navigation">
+          <h2>路径点与导航</h2>
+          <p class="hint">点坐标在地图 world 坐标系，Z 是地面高度。拖拽左侧序号可调整顺序；修改后可保存、预览或直接更新运行路线。</p>
+          <div class="row"><button id="wp-click-mode" class="secondary">开启地图取点</button><button id="add-waypoint" class="secondary">＋ 手动添加</button></div>
+          <div class="wp-header"><span>顺序</span><span>X / m</span><span>Y / m</span><span>Z / m</span><span></span></div>
+          <div id="waypoints" class="waypoints"></div>
+          <div class="row"><button id="save-waypoints" class="secondary">保存路径点</button><button id="clear-waypoints" class="ghost">清空列表</button></div>
+          <div class="row"><button id="import-waypoints" class="ghost">导入 JSON</button><button id="export-waypoints" class="ghost">导出 JSON</button></div>
+          <input type="file" id="waypoint-file" accept="application/json,.json" hidden>
+          <div class="row"><button id="preview-route">原生 PCT 预览</button><button id="start-nav" class="amber">启动导航</button></div>
+          <button id="apply-route" class="secondary wide">将在线修改应用到当前导航</button>
+          <div class="info-card"><h3>规划反馈</h3><p id="route-state">尚无规划路线</p></div>
+          <div class="info-card navigation-rgb" aria-label="机器人 RGB 实时画面">
+            <div class="navigation-rgb-head"><h3>机器人 RGB</h3><span id="nav-rgb-state">等待彩色相机</span></div>
+            <img id="navigation-rgb-image" alt="机器人彩色相机实时画面">
+          </div>
+        </section>
+
+        <section class="tab-page" id="tab-patrol"></section>
+
+        <section class="tab-page" id="tab-settings">
+          <h2>部署参数</h2>
+          <p class="hint">这些参数写入独立部署配置，不编辑上游算法源码。修改前停止建图、定位和导航；新参数在下一次启动对应组件时生效。</p>
+          <div class="settings-sections">
+          <div class="settings-column">
+          <details open><summary>车辆几何与自动导航上限</summary><div id="robot-fields" class="settings-grid"></div><button id="save-robot" class="wide">保存车辆参数并生成 ROS 配置</button></details>
+          <details><summary>PCT 全局路径参数</summary><div id="pct-fields" class="settings-grid"></div><button id="save-pct" class="wide">保存 PCT 参数</button></details>
+          </div>
+          <div class="settings-column">
+          <details><summary>Tomogram 地形参数</summary><div id="terrain-fields" class="settings-grid"></div><button id="save-terrain" class="wide">保存地形参数</button></details>
+          <details><summary>上游 ROS YAML 高级参数</summary><p class="hint">可编辑所有已部署的 FAST-LIO、定位、局部规划、控制器 YAML。每次保存自动备份原文件。</p><select id="yaml-select"><option value="mapping">FAST-LIO 建图</option><option value="localization">实时定位</option><option value="planner">局部规划</option><option value="controllers">轨迹跟踪控制器</option></select><textarea id="yaml-editor" spellcheck="false" rows="18"></textarea><button id="save-yaml" class="wide">验证并保存此 YAML</button></details>
+          </div>
+          </div>
+          <button id="restart-lidar" class="secondary wide">重启雷达驱动（仅空闲时）</button>
+          <button id="export-settings" class="ghost wide">导出当前完整参数 JSON</button>
+        </section>
+      </div>
+      <div class="control-footer"><div id="message" role="status">正在读取状态…</div><div class="row"><button id="stop" class="secondary">取消 manager 任务</button><button id="estop" class="danger" hidden>取消任务</button></div><small>取消通过 manager → Nav2 完成，不替代底盘硬件急停。</small></div>
+    </aside>
+  </main>
+  <script type="module" src="/static/app.js?v=door1"></script>
+</body>
+</html>

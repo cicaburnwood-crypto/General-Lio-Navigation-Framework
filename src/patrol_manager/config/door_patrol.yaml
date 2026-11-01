@@ -1,0 +1,22 @@
+# Configure in the copied GUI. Nulls are deliberately not runnable coordinates.
+frame_id: map
+navigation:
+  xy_tolerance: 0.1
+  yaw_tolerance: 0.1
+  timeout_sec: 120.0
+door:
+  settle_seconds: 1.0
+  linear_stopped_mps: 1.0
+  angular_stopped_radps: 0.03
+  observation_max_age_sec: 0.5
+points:
+  - name: Door front
+    type: red
+    position: [null, null, null]
+    yaw: null
+    inspection_duration_sec: 0.0
+  - name: After door
+    type: blue
+    position: [null, null, null]
+    yaw: null
+    inspection_duration_sec: 0.0

@@ -1,0 +1,4 @@
+.vscode
+build
+# This snapshot vendors the ROS2 package.xml for reproducible colcon discovery.
+__pycache__

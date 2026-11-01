@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bringup</name>
+  <version>0.1.0</version>
+  <description>Top-level launch and shared configuration for the chassis navigation stack.</description>
+  <maintainer email="hit.zhangwf@gmail.com">waney</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>chassis_localization</exec_depend>
+  <exec_depend>chassis_3d_localization</exec_depend>
+  <exec_depend>fast_lio</exec_depend>
+  <exec_depend>livox_ros_driver2</exec_depend>
+  <exec_depend>livox_self_filter</exec_depend>
+  <exec_depend>nav_interface_adapter</exec_depend>
+  <exec_depend>navigation</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

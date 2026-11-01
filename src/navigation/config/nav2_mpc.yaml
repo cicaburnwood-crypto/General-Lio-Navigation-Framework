@@ -1,0 +1,217 @@
+# Nav2 known-map navigation parameters.
+# Local control uses agv_mpc_controller::MpcController. The controller outputs
+# geometry_msgs/Twist on the standard Nav2 cmd_vel path; agv2_pkg consumes it.
+
+bt_navigator:
+  ros__parameters:
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.001
+    progress_checker_plugin: progress_checker
+    goal_checker_plugins: [general_goal_checker]
+    controller_plugins: [FollowPath]
+
+    progress_checker:
+      plugin: nav2_controller::SimpleProgressChecker
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
+
+    general_goal_checker:
+      plugin: nav2_controller::SimpleGoalChecker
+      xy_goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.087
+      stateful: true
+
+    FollowPath:
+      plugin: agv_mpc_controller::MpcController
+      horizon_steps: 15
+      time_step: 0.10
+      vx_samples: 7
+      vy_samples: 5
+      omega_samples: 9
+      min_vx: -0.10
+      max_vx: 0.30
+      min_vy: -0.18
+      max_vy: 0.18
+      min_omega: -0.50
+      max_omega: 0.50
+      max_accel_x: 0.60
+      max_accel_y: 0.60
+      max_accel_omega: 1.00
+      allow_reverse: true
+      allow_lateral: true
+      robot_radius: 0.35
+      goal_tolerance: 0.10
+      yaw_goal_tolerance: 0.087
+      transform_tolerance: 0.2
+      plan_window_distance: 6.0
+      unknown_is_lethal: false
+      unknown_cost: 0.5
+      debug_trajectory: true
+      path_weight: 6.0
+      goal_weight: 4.0
+      heading_weight: 1.5
+      obstacle_weight: 12.0
+      smoothness_weight: 1.0
+      reverse_weight: 0.8
+      lateral_weight: 0.2
+      rotation_weight: 0.1
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0
+      publish_frequency: 2.0
+      global_frame: odom
+      robot_base_frame: base_link
+      rolling_window: true
+      width: 6
+      height: 6
+      resolution: 0.05
+      robot_radius: 0.35
+      plugins: [voxel_layer, inflation_layer]
+      voxel_layer:
+        plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer
+        enabled: true
+        voxel_decay: 5.0
+        decay_model: 0
+        voxel_size: 0.05
+        track_unknown_space: true
+        unknown_threshold: 15
+        mark_threshold: 0
+        update_footprint_enabled: true
+        combination_method: 1
+        origin_z: 0.0
+        publish_voxel_map: false
+        transform_tolerance: 0.2
+        mapping_mode: false
+        observation_sources: pointcloud
+        pointcloud:
+          data_type: PointCloud2
+          topic: /sensors/cloud
+          marking: true
+          clearing: true
+          obstacle_range: 6.0
+          min_obstacle_height: 0.15
+          max_obstacle_height: 0.8
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          voxel_filter: true
+      inflation_layer:
+        plugin: nav2_costmap_2d::InflationLayer
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.35
+      always_send_full_costmap: true
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_link
+      robot_radius: 0.3              # 与 local_costmap 保持一致
+      resolution: 0.05
+      track_unknown_space: true
+      # plugins: [static_layer, obstacle_layer, inflation_layer]
+      plugins: [static_layer, inflation_layer]
+      static_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_subscribe_transient_local: true
+      # obstacle_layer:
+      #   plugin: nav2_costmap_2d::ObstacleLayer
+      #   enabled: true
+      #   observation_sources: scan
+      #   scan:
+      #     topic: /scan
+      #     max_obstacle_height: 2.0
+      #     clearing: true
+      #     marking: true
+      #     data_type: LaserScan
+      inflation_layer:
+        plugin: nav2_costmap_2d::InflationLayer
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.4
+      always_send_full_costmap: true
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 1.0
+    planner_plugins: [GridBased]
+    # GridBased:
+    #   plugin: nav2_navfn_planner/NavfnPlanner
+    #   tolerance: 0.5
+    #   use_astar: True
+    #   allow_unknown: true
+    GridBased:
+      plugin: nav2_smac_planner/SmacPlanner2D
+      tolerance: 0.5
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 2.0
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
+      smooth_path: true
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
+
+behavior_server:
+  ros__parameters:
+    local_costmap_topic: local_costmap/costmap_raw
+    global_costmap_topic: global_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    global_footprint_topic: global_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: [spin, backup, drive_on_heading, wait]
+    spin:
+      plugin: nav2_behaviors/Spin
+    backup:
+      plugin: nav2_behaviors/BackUp
+    drive_on_heading:
+      plugin: nav2_behaviors/DriveOnHeading
+    wait:
+      plugin: nav2_behaviors/Wait
+    global_frame: odom
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    simulate_ahead_time: 2.0
+
+waypoint_follower:
+  ros__parameters:
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: wait_at_waypoint
+    wait_at_waypoint:
+      plugin: nav2_waypoint_follower::WaitAtWaypoint
+      enabled: true
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: OPEN_LOOP
+    max_velocity: [0.4, 0.2, 0.6]
+    min_velocity: [-0.2, -0.2, -0.6]
+    max_accel: [0.8, 0.8, 1.2]
+    max_decel: [-0.8, -0.8, -1.2]
+    odom_topic: /odom
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0

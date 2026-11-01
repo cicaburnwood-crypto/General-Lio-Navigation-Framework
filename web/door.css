@@ -1,0 +1,11 @@
+/* Keep the original viewer/layout. Hide controls for the other navigation stack. */
+.record-controls, #guide-launch, .tab[data-tab="mapping"], .tab[data-tab="terrain"],
+.tab[data-tab="navigation"], .tab[data-tab="settings"], #guide { display:none !important; }
+.door-point { padding:12px; margin:8px 0; background:#132936; border-radius:8px; }
+.door-point.selected { outline:1px solid #52dbbb; }
+.door-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.door-camera { width:100%; min-height:120px; object-fit:contain; background:#09131c; }
+.door-probs { display:flex; gap:8px; flex-wrap:wrap; }
+.door-probs span { padding:6px; border-radius:6px; background:#533536; }
+.door-probs span.pass { background:#1c5b4c; }
+button:disabled { opacity:.5; }

@@ -1,0 +1,8 @@
+door_opening_server:
+  ros__parameters:
+    image_topic: /camera/d435i/color/image_raw
+    provider: auto
+    opening_threshold: 0.38
+    intra_op_threads: 4
+    max_frame_age_sec: 0.25
+    image_reliability: reliable

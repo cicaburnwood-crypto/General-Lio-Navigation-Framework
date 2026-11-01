@@ -1,0 +1,23 @@
+task_navigation_bridge:
+  ros__parameters:
+    enable_table_approach: true
+    odom_frame: odom
+    clearance_radius: 0.27
+
+    # meeting_room2 tabletop rectangle in map coordinates.
+    table_center_x: 2.13
+    table_center_y: 0.03
+    table_yaw: 0.0
+    table_length: 2.05
+    table_width: 1.25
+    table_centerline_tolerance: 0.05
+    staging_offset: 0.33
+
+    insertion_distance: 0.20
+    insertion_speed: 0.05
+    control_rate: 20.0
+    zero_hold_duration: 0.30
+    heading_kp: 1.5
+    max_angular_speed: 0.30
+    arrived_repeat_count: 1
+    arrived_repeat_interval: 0.0

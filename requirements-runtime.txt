@@ -1,0 +1,5 @@
+# Python 3.10 on Ubuntu 22.04. ROS/OpenCV/aiohttp come from apt.
+numpy==1.26.4
+Pillow==12.2.0
+onnxruntime==1.23.2
+av==17.1.0

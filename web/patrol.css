@@ -1,0 +1,20 @@
+.patrol-head {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.patrol-head h2 {margin:0}
+.patrol-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.patrol-fields label,.patrol-point label {display:flex;flex-direction:column;gap:3px;font-size:12px}
+.patrol-point {border:1px solid #334e60;background:#102430;border-radius:8px;padding:10px;margin:8px 0}
+.patrol-point.selected {border-color:#52dbbb;box-shadow:inset 3px 0 #52dbbb}
+.patrol-point-head {display:flex;gap:6px;align-items:center;margin-bottom:8px}
+.patrol-point-head strong {flex:1}
+.patrol-point-head button {padding:4px 8px}
+.patrol-point-fields {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.patrol-point-fields input {min-width:0;width:100%}
+.patrol-point-fields .patrol-name {grid-column:span 2}
+.patrol-check {display:flex;align-items:center;gap:8px;margin:10px 0}
+.patrol-check input {width:auto}
+#patrol-file {overflow-wrap:anywhere;font-size:11px;color:#9cb6c5}
+#patrol-feedback {white-space:pre-line;margin:8px 0}
+#patrol-preview {max-height:260px;overflow:auto;font-size:11px;background:#091821;padding:10px;border-radius:6px}
+.patrol-file-actions {position:sticky;bottom:0;background:#10212e;padding:8px 0;z-index:2;border-top:1px solid #334e60}
+.tabs {overflow-x:auto}
+.tab {white-space:nowrap}

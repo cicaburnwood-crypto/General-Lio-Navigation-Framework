@@ -1,0 +1,62 @@
+# 局部 costmap STVL 体素层调参文件。
+#
+# 当前 ground-truth 在 nav2.yaml 内 local_costmap.local_costmap.ros__parameters.voxel_layer。
+# 本文件用于：
+#   1) 在不同场地（室内办公室 vs 室外平台）维护多套调参，便于切换；
+#   2) 给 RewrittenYaml / 多 params_file 注入留口，避免每次都改 nav2.yaml；
+#   3) 文档化 STVL 关键字段含义，方便后人快速调。
+#
+# 详见 framework.md §6。
+#
+# 与 nav2.yaml 同步策略：
+#   - 修改时优先改 nav2.yaml（实际生效）
+#   - 调参确定后回写到本文件作为环境快照
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      voxel_layer:
+        plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer
+        enabled: true
+
+        # 体素分辨率：framework.md §6 推荐 0.05~0.10 m
+        # 室内办公室细密障碍多，取小一些；室外可放大省 CPU
+        voxel_size: 0.05
+
+        # 时间衰减：观测停止后多久从 costmap 消除
+        # decay 太短：动态障碍清除快，但偶发遮挡会反复闪烁
+        # decay 太长：人走过的"鬼影"残留
+        voxel_decay: 15.0
+        decay_model: 0          # 0=线性 1=指数 -1=不衰减
+
+        # 标记/清除阈值：根据点云密度调
+        track_unknown_space: true
+        unknown_threshold: 15
+        mark_threshold: 0
+        combination_method: 1
+        update_footprint_enabled: true
+
+        origin_z: 0.0
+        transform_tolerance: 0.2
+        mapping_mode: false
+        publish_voxel_map: false  # 调参时可临时打开看体素
+
+        observation_sources: pointcloud
+        pointcloud:
+          data_type: PointCloud2
+          topic: /sensors/cloud
+          marking: true
+          clearing: true
+
+          # 距离裁剪：远点不进 costmap，省算力且远处置信度低
+          obstacle_range: 6.0     # 5~8 m，按 LiDAR 实际有效远点
+
+          # 高度裁剪：地面点过滤（关键，详见 framework.md §6.3）
+          # 地面 + 5 cm 到机器人最高点 + 余量
+          min_obstacle_height: 0.05
+          max_obstacle_height: 2.0
+
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          voxel_filter: true

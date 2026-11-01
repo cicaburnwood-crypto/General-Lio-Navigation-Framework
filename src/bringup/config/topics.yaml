@@ -1,0 +1,23 @@
+# 算法工程对外的标准 topic 名。节点代码内只用包内通用名（如 cloud_in / scan），
+# bringup 层在 launch 时通过 remap 把外部 topic 接到这里定义的标准名。
+# 详见 framework.md 第 12 节（接口契约）。
+#
+# 这是文档化的"事实表"。如需在 launch 中以 yaml 形式注入，可以在 Python launch
+# 里读取本文件后展开为 remap 列表。当前所有 launch 文件都直接 hardcode 这里
+# 列出的名字，保持单一事实源。
+
+inputs:
+  cloud:        /sensors/cloud         # sensor_msgs/PointCloud2  (frame_id = base_link)
+  imu:          /sensors/imu           # sensor_msgs/Imu          (frame_id = imu_link)
+  goal:         /goal_pose             # geometry_msgs/PoseStamped (frame_id = map)
+  initial_pose: /initialpose           # geometry_msgs/PoseWithCovarianceStamped
+
+outputs:
+  cmd_vel:      /cmd_vel               # geometry_msgs/Twist     -> hardware driver
+  odom:         /odom                  # nav_msgs/Odometry
+  diagnostics:  /diagnostics           # diagnostic_msgs/DiagnosticArray
+
+# 内部 topic：不对外承诺稳定性，外部模块勿订阅。
+internal:
+  scan:         /scan                  # 由 nav_interface_adapter 从 cloud 投影出来供 AMCL 用
+  map:          /map                   # 由 map_server 发布

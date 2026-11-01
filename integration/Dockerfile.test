@@ -1,0 +1,12 @@
+FROM library-door-opening:humble-test
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends ros-humble-nav2-msgs ros-humble-tf2-ros-py python3-aiohttp && rm -rf /var/lib/apt/lists/*
+WORKDIR /integration_ws
+COPY src/scan_planner_msgs src/scan_planner_msgs
+COPY src/patrol_manager src/patrol_manager
+COPY src/door_opening_server src/door_opening_server
+RUN . /opt/ros/humble/setup.sh && colcon build --merge-install --cmake-args -DBUILD_TESTING=OFF
+COPY integration/tests /door_tests
+COPY integration /integration
+ENV ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=192 TEST_RESULTS_DIR=/tmp
+CMD ["bash", "-c", "source /integration_ws/install/setup.bash && python3 -m pytest -q /door_tests"]

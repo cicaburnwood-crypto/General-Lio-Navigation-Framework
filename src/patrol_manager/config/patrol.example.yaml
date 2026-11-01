@@ -1,0 +1,17 @@
+# 示例使用 world，目标 Z 已由原示例 base 高度减 0.3；仅示例，运行前核对实际地图。
+frame_id: world
+navigation:
+  xy_tolerance: 0.3
+  z_tolerance: 0.3
+  timeout_sec: 120.0
+
+points:
+  - name: P1
+    position: [0.862458, 1.067883, 0.209139]
+    inspection_duration_sec: 1.0  # 仅占位等待，不执行真实检查
+  - name: P2
+    position: [0.433, -0.06, 8.503]
+    inspection_duration_sec: 1.0  # 仅占位等待，不执行真实检查
+home:
+  name: Home
+  position: [0.433, -0.06, 0.5]

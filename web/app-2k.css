@@ -1,0 +1,76 @@
+/* Full-resolution operator layout.  The compact rules are deliberately scoped
+   so smaller displays keep the original single-column control workflow. */
+@media (min-width: 1400px) and (min-height: 900px),
+       (min-width: 1200px) and (min-height: 600px) and (min-resolution: 1.5dppx) {
+  :root { font-size: 13px; }
+  .topbar { height: 46px; padding: 0 14px; }
+  .brand strong { font-size: 18px; }
+  .brand span { margin-left: 9px; }
+  .top-state span { padding: 4px 9px; }
+  .workflow { height: 30px; gap: 8px; padding: 0 14px; font-size: 11px; }
+  main {
+    height: calc(100dvh - 76px);
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) clamp(780px, 40vw, 1020px);
+    gap: 8px;
+    padding: 8px;
+  }
+  button { padding: 6px 9px; border-radius: 6px; }
+  input, select { padding: 6px 8px; border-radius: 6px; }
+  .viewer-toolbar, .viewer-footer { padding: 5px 10px; }
+  .viewer-toolbar, .viewer-footer { min-height: 34px; }
+  .viewer-help { padding: 0 10px 6px; font-size: 10px; }
+  .viewer-card.mapping-view .viewer-workspace {
+    grid-template-columns: minmax(340px, 32%) minmax(0, 1fr);
+  }
+  .mapping-rgb-head { padding: 7px 10px; }
+  .mapping-rgb p { margin: 5px 0; padding: 0 10px; }
+  .tabs { flex-wrap: nowrap; gap: 4px; padding: 6px; }
+  .tab { padding: 6px 10px; }
+  .tab-pages { padding: 9px 11px; }
+  .tab-page h2 { font-size: 16px; margin: 0 0 5px; }
+  .tab-page h3 { font-size: 12px; margin: 0 0 4px; }
+  .hint { font-size: 11px; margin: 4px 0 7px; line-height: 1.35; }
+  .row { gap: 7px; margin: 6px 0; }
+  .info-card { padding: 8px; margin: 7px 0; }
+  .info-card p { margin: 2px 0; }
+  .slider-row { margin: 8px 0; }
+  .slider-row label { font-size: 11px; }
+  .drive-keyboard { gap: 5px; margin: 8px 0; }
+  .drive-keyboard button { min-height: 39px; font-size: 15px; }
+  .mapping-columns, .settings-sections {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 11px;
+    align-items: start;
+  }
+  .mapping-setup, .mapping-drive, .settings-column { min-width: 0; }
+  #mapping-waypoint-card { position: static; }
+  #mapping-waypoint-card .hint { margin: 4px 0; }
+  .mapping-waypoint-list { max-height: 110px; }
+  .control-footer { padding: 6px 10px; }
+  .control-footer .row { margin: 5px 0 0; }
+  .guide { max-height: 235px; padding: 8px 11px; }
+  .guide h2 { margin: 4px 0 3px; font-size: 14px; }
+  .guide > p { margin: 3px 0 5px; font-size: 11px; }
+  .guide-actions { margin-top: 6px; }
+  .guide-meter { margin: 6px 0 3px; }
+  .settings-column details { margin: 0 0 7px; padding: 7px; }
+  .settings-column summary { font-size: 12px; }
+  .settings-grid { gap: 5px 7px; margin: 6px 0; }
+  .settings-grid label { min-width: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .settings-grid input { margin-top: 2px; padding: 4px 6px; font-size: 12px; }
+  .settings-column details > button { margin-top: 5px; }
+  #yaml-editor { min-height: 0; height: 150px; margin-top: 6px; }
+  #waypoints { max-height: min(380px, 36vh); }
+  .wp-header { margin: 6px 0 2px; }
+  .wp { padding: 2px 0; }
+  .wp input { padding: 5px; }
+}
+@media (min-width: 1200px) and (max-width: 1399px) and (min-height: 600px) and (min-resolution: 1.5dppx) {
+  body { width: 200vw; zoom: .5; }
+  main { height: calc(200dvh - 76px); }
+}
+@media (min-width: 1400px) and (min-height: 900px) and (max-height: 1000px) {
+  #yaml-editor { height: 100px; }
+}

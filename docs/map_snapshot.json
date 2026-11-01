@@ -1,0 +1,35 @@
+{
+  "source": "AL_deployment_20261028/map_clear_weststrip_20261029/hkclr_office",
+  "source_hashes": {
+    "3D/map.pcd": "cae79086e6d81f0fd9c2ff40800e1a7a84ef891d9b4f8928d0d0554eec4e51af",
+    "2D/hkclr_office_2d.pgm": "4054e043ed1f3bfef84dc3544a4f3cdf8a24f3fa358e6e8ac9147170f67156be",
+    "2D/hkclr_office_2d.yaml": "60bc7aa39922c8af35ad4babd060ccabf63f7d2d440b717e925f23f639101143"
+  },
+  "regions": [
+    {
+      "pixel_bounds": [
+        302,
+        601,
+        333,
+        650
+      ],
+      "match_score": null,
+      "bounds_m": {
+        "xmin": 1.4810300800000018,
+        "xmax": 3.0310300800000025,
+        "ymin": -28.85812454,
+        "ymax": -26.408124540000003
+      },
+      "occupied_cells_removed": 110,
+      "points_removed": 373
+    }
+  ],
+  "total_points_before": 223899,
+  "total_points_after": 223526,
+  "changed_cells": 1164,
+  "files": {
+    "3D/map.pcd": "3364b28d9c9e40ade4ea144adc5514d9af0567fff3d96c80c02fdfddbbe80428",
+    "2D/hkclr_office_2d.pgm": "3234f59c975f886ff15ae3735ee43a7cdda477baaacc6058aed2e26d91704214",
+    "2D/hkclr_office_2d.yaml": "60bc7aa39922c8af35ad4babd060ccabf63f7d2d440b717e925f23f639101143"
+  }
+}

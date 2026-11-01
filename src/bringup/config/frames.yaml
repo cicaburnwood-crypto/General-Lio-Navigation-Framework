@@ -1,0 +1,12 @@
+# frame_id 集中管理。所有节点通过参数注入，不允许在代码里 hardcode。
+# 详见 framework.md 第 3 节。
+#
+# 当前各 yaml 配置文件里出于可读性直接写了这些名字；如果未来要做整套 frame
+# 重命名，可以扩展 launch，让它从本文件读取后通过参数覆盖各节点的 *_frame_id。
+
+frames:
+  map:        map           # AMCL 提供
+  odom:       odom          # 外部里程计源提供 odom→base_link
+  base_link:  base_link     # 机器人本体根
+  lidar_link: lidar_link    # 由外部 static_transform_publisher / URDF 提供
+  imu_link:   imu_link      # 同上

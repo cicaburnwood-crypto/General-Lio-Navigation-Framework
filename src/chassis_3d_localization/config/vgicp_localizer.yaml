@@ -1,0 +1,83 @@
+/**:
+  ros__parameters:
+    cloud_topic: /sensors/cloud
+    odom_topic: /odom
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_link
+    pcd_map_path: ""
+    initialpose_topic: /initialpose
+    # Alignment attempts per second. Runs in its own callback group, so a
+    # slow solve no longer stalls the map->odom TF publisher.
+    update_hz: 2.0
+    registration_method: VGICP
+
+    submap_radius_xy: 12.0
+    submap_radius_z: 3.0
+
+    # Height band (meters, base_link/map floor plane) kept for registration.
+    # Drops ceiling points: they dominate small indoor scans but carry no yaw
+    # information. Keep the floor so z/roll/pitch stay constrained.
+    # Set registration_z_min >= registration_z_max to disable.
+    registration_z_min: -0.5
+    registration_z_max: 2.2
+
+    rough_scan_resolution: 0.25
+    rough_map_resolution: 0.25
+    refine_scan_resolution: 0.10
+    refine_map_resolution: 0.10
+
+    rough_max_iteration: 20
+    refine_max_iteration: 30
+    rough_max_correspondence_distance: 1.0
+    refine_max_correspondence_distance: 0.3
+    # RMS correspondence error thresholds in METERS.
+    # rough_score_thresh is a plain absolute gate (rough only seeds refine).
+    # refine_score_thresh is a SANITY CEILING, not a fine filter: the
+    # achievable rms floor moves with scene-vs-map drift (0.105 clean room,
+    # 0.16 with a few extra chairs, runs 20260707/20260708), so persistent
+    # ceiling rejections mean "scene no longer matches the map" and refusing
+    # to localize then is intended. Fine filtering is relative, below.
+    rough_score_thresh: 0.4
+    refine_score_thresh: 0.15
+    # Reject solutions worse than baseline * factor, where baseline is an EMA
+    # (weight score_baseline_beta) of accepted rms. 07-07 data: bad yaw mode
+    # 0.132 vs baseline 0.105 (ratio 1.26) -> caught by 1.2. After
+    # max_consecutive_score_rejections outlier rejections under the ceiling
+    # the result is accepted and the baseline re-seeded, so a locally worse
+    # spot cannot deadlock corrections. <= 0 disables that recovery.
+    refine_score_outlier_factor: 1.2
+    score_baseline_beta: 0.2
+    max_consecutive_score_rejections: 5
+
+    # Per-iteration convergence steps, split per stage: rough only seeds
+    # refine (0.3 m correspondence basin) so it stops early; refine's stop
+    # criterion is the output precision so it stays tight. The old single
+    # transformation_epsilon (1e-4, plus fast_gicp's hardcoded 2e-3 rotation
+    # criterion) left ~half of rough attempts falsely "not converged".
+    rough_transformation_epsilon: 2.0e-3
+    rough_rotation_epsilon: 1.0e-2
+    refine_transformation_epsilon: 5.0e-4
+    refine_rotation_epsilon: 2.0e-3
+    correspondence_randomness: 20
+    num_threads: 4
+
+    # Accepted corrections are EMA-blended into map->odom (translation lerp,
+    # rotation slerp) instead of overwriting it, so per-solve scatter does
+    # not twitch the pose while standing still. 1.0 disables smoothing
+    # (field rollback switch); initialization and jump overrides always snap.
+    correction_smoothing_alpha: 0.4
+
+    # Jump gate: corrections larger than this are rejected, but after
+    # max_consecutive_rejections consecutive jump rejections with passing
+    # scores the result is accepted anyway so localization can re-attach
+    # instead of deadlocking. <= 0 restores reject-forever behavior.
+    max_translation_jump: 0.3
+    max_yaw_jump_deg: 5.0
+    max_consecutive_rejections: 5
+
+    min_scan_points: 200
+    min_submap_points: 1000
+
+    # map->odom TF is stamped now()+transform_tolerance (seconds), AMCL-style.
+    transform_tolerance: 0.3

@@ -1,0 +1,7 @@
+unique_identifier_msgs/UUID task_id
+---
+# Output gate is closed; this is NOT a physical standstill confirmation.
+bool output_blocked
+# Pending computations/trajectory state have been discarded.
+bool cleanup_complete
+string reason

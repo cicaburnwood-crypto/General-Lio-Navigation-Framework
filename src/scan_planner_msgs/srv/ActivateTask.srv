@@ -1,0 +1,4 @@
+unique_identifier_msgs/UUID task_id
+---
+bool accepted
+string reason

@@ -1,0 +1,46 @@
+# LiDAR profile table for selecting one MID360 at launch time.
+#
+# Coordinate convention:
+#   base_link: x forward, y left, z up.
+#   base_to_lidar_xyz: LiDAR origin expressed in base_link, meters.
+#   base_to_lidar_rpy: LiDAR orientation relative to base_link, radians.
+#
+# The xyz/rpy and self-filter boxes below are placeholders. Measure the real
+# robot and update them before relying on localization quality.
+
+default_lidar: front_118
+
+base_frame: base_link
+input_livox_topic: /livox/lidar
+filtered_livox_topic: /livox/lidar_filtered
+
+self_filter:
+  # Flat list: min_x, min_y, min_z, max_x, max_y, max_z per box in base_link.
+  # Example body/waist mask, slightly behind the robot center.
+  boxes_base_link: [-0.25, -0.35, 0.10, 0.25, 0.35, 1.45]
+
+profiles:
+  front_118:
+    ip: 192.168.1.118
+    lidar_frame: lidar_front_118
+    driver_config: livox/MID360_118_config.json
+    base_to_lidar_xyz: [0.30, 0.0, 0.1]
+    base_to_lidar_rpy: [0.0, 0.0, 0.0]
+    boxes_base_link: []
+
+  right_rear_115:
+    ip: 192.168.1.115
+    lidar_frame: lidar_right_rear_115
+    driver_config: livox/MID360_115_config.json
+    base_to_lidar_xyz: [-0.2, -0.16, 0.1]
+    # Mounted facing rearward: yaw = pi relative to base_link.
+    base_to_lidar_rpy: [0.0, 0.0, 3.14159]
+    boxes_base_link: []
+
+  left_front_119:
+    ip: 192.168.1.119
+    lidar_frame: lidar_left_front_119
+    driver_config: livox/MID360_119_config.json
+    base_to_lidar_xyz: [0.2, 0.16, 0.1]
+    base_to_lidar_rpy: [0.0, 0.0, 0.0]
+    boxes_base_link: []

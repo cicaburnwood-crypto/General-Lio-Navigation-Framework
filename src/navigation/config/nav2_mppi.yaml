@@ -1,0 +1,238 @@
+bt_navigator:  # High-level Nav2 task manager
+  ros__parameters:  # BT navigator parameters
+    global_frame: map  # Global navigation frame
+    robot_base_frame: base_link  # Robot body frame
+    odom_topic: /odom  # Odometry topic
+    bt_loop_duration: 10  # Behavior tree tick period, ms
+    default_server_timeout: 20  # Default action timeout, s
+
+controller_server:  # Local control server
+  ros__parameters:  # Controller server parameters
+    controller_frequency: 20.0  # Control loop rate, Hz
+    min_x_velocity_threshold: 0.001  # Ignore tiny vx noise
+    min_y_velocity_threshold: 0.001  # Ignore tiny vy noise
+    min_theta_velocity_threshold: 0.001  # Ignore tiny wz noise
+    progress_checker_plugin: progress_checker  # Progress checker ID
+    goal_checker_plugins: [general_goal_checker]  # Goal checker IDs
+    controller_plugins: [FollowPath]  # Controller plugin IDs
+
+    progress_checker:  # Progress checker config
+      plugin: nav2_controller::SimpleProgressChecker  # Progress checker plugin
+      required_movement_radius: 0.25  # Required progress distance, m
+      movement_time_allowance: 10.0  # Allowed no-progress time, s
+
+    general_goal_checker:  # Goal checker config
+      plugin: nav2_controller::SimpleGoalChecker  # Goal checker plugin
+      xy_goal_tolerance: 0.05  # Position tolerance, m
+      yaw_goal_tolerance: 0.087  # Heading tolerance, rad
+      stateful: true  # Latch XY success
+
+    FollowPath:  # MPPI controller config
+      plugin: nav2_mppi_controller::MPPIController  # Local planner plugin
+      time_steps: 50  # Prediction steps
+      model_dt: 0.05  # Step duration, s
+      batch_size: 1500  # Candidate trajectories
+      iteration_count: 1  # Optimization passes
+      prune_distance: 2.0  # Path pruning distance, m
+      transform_tolerance: 0.2  # TF tolerance, s
+      temperature: 0.3  # Cost selectivity
+      gamma: 0.015  # Control effort penalty
+      motion_model: Omni  # Holonomic motion model
+      visualize: true  # Publish MPPI debug topics
+      vx_std: 0.20  # vx sampling noise
+      vy_std: 0.15  # vy sampling noise
+      wz_std: 0.35  # wz sampling noise
+      vx_max: 0.45  # Max forward speed, m/s
+      vx_min: -0.15  # Max reverse speed, m/s
+      vy_max: 0.25  # Max lateral speed, m/s
+      wz_max: 0.70  # Max yaw rate, rad/s
+      retry_attempt_limit: 1  # Control retry count
+      TrajectoryVisualizer:  # MPPI RViz output
+        trajectory_step: 20  # Trajectory downsample step
+        time_step: 5  # Time-point downsample step
+      critics: [ConstraintCritic, CostCritic, GoalCritic, GoalAngleCritic, PathAlignCritic, PathFollowCritic, PathAngleCritic, TwirlingCritic]  # MPPI scoring critics
+      ConstraintCritic:  # Velocity constraint critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 4.0  # Cost weight
+      CostCritic:  # Costmap obstacle critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 8.0  # Cost weight
+        critical_cost: 250.0  # Near-lethal cost threshold
+        consider_footprint: true  # Check full footprint
+        collision_cost: 1000000.0  # Collision penalty
+        near_goal_distance: 0.8  # Near-goal distance, m
+        inflation_layer_name: inflation_layer  # Inflation layer ID
+      GoalCritic:  # Goal position critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 5.0  # Cost weight
+        threshold_to_consider: 1.4  # Active distance, m
+      GoalAngleCritic:  # Goal heading critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 8.0  # Cost weight
+        threshold_to_consider: 0.8  # Active distance, m
+        symmetric_yaw_tolerance: false  # Require exact goal yaw
+      PathAlignCritic:  # Path alignment critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 10.0  # Cost weight
+        max_path_occupancy_ratio: 0.05  # Disable if path is blocked
+        trajectory_point_step: 3  # Scored point stride
+        threshold_to_consider: 0.5  # Active distance, m
+        offset_from_furthest: 20  # Lookahead path offset
+        use_path_orientations: false  # Ignore path yaw
+      PathFollowCritic:  # Path progress critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 5.0  # Cost weight
+        offset_from_furthest: 5  # Lookahead path offset
+        threshold_to_consider: 1.4  # Active distance, m
+      PathAngleCritic:  # Path heading critic
+        enabled: true  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 2.0  # Cost weight
+        offset_from_furthest: 4  # Heading lookahead offset
+        threshold_to_consider: 0.5  # Active distance, m
+        max_angle_to_furthest: 1.0  # Max heading error, rad
+        forward_preference: true  # Allow reverse/lateral choices
+      TwirlingCritic:  # Spin penalty critic
+        enabled: false  # Enable critic
+        cost_power: 1  # Cost exponent
+        cost_weight: 0.5  # Cost weight
+
+local_costmap:  # Rolling local costmap
+  local_costmap:  # Local costmap node
+    ros__parameters:  # Local costmap parameters
+      update_frequency: 5.0  # Update rate, Hz
+      publish_frequency: 2.0  # Publish rate, Hz
+      global_frame: odom  # Local costmap frame
+      robot_base_frame: base_link  # Robot body frame
+      rolling_window: true  # Follow the robot
+      width: 6  # Costmap width, m
+      height: 6  # Costmap height, m
+      resolution: 0.05  # Cell size, m
+      footprint: "[[0.28, 0.18], [0.28, -0.18], [-0.28, -0.18], [-0.28, 0.18]]"  # Robot footprint
+      plugins: [voxel_layer, inflation_layer]  # Local layers
+      voxel_layer:  # 3D obstacle layer
+        plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer  # Voxel plugin
+        enabled: true  # Enable layer
+        voxel_decay: 5.0  # Obstacle decay time, s
+        decay_model: 0  # Linear decay
+        voxel_size: 0.05  # Voxel size, m
+        track_unknown_space: true  # Track unknown cells
+        unknown_threshold: 15  # Unknown voxel threshold
+        mark_threshold: 0  # Marking threshold
+        update_footprint_enabled: true  # Update footprint clearing
+        combination_method: 1  # Layer merge method
+        origin_z: 0.0  # Voxel grid origin z
+        publish_voxel_map: false  # Disable voxel debug map
+        transform_tolerance: 0.2  # TF tolerance, s
+        mapping_mode: false  # Navigation mode
+        observation_sources: pointcloud  # Observation source list
+        pointcloud:  # Point cloud source
+          data_type: PointCloud2  # Sensor message type
+          topic: /sensors/cloud  # Adapted cloud topic
+          marking: true  # Mark obstacles
+          clearing: true  # Clear free space
+          obstacle_range: 6.0  # Max obstacle range, m
+          min_obstacle_height: 0.15  # Floor filter, m
+          max_obstacle_height: 0.8  # Upper obstacle filter, m
+          expected_update_rate: 0.0  # No rate enforcement
+          observation_persistence: 0.0  # Do not persist observations
+          inf_is_valid: false  # Ignore infinite readings
+          voxel_filter: true  # Filter cloud into voxels
+      inflation_layer:  # Local inflation layer
+        plugin: nav2_costmap_2d::InflationLayer  # Inflation plugin
+        cost_scaling_factor: 2.0  # Cost falloff
+        inflation_radius: 0.3  # Inflation radius, m
+      always_send_full_costmap: true  # Publish full costmap
+
+global_costmap:  # Planner costmap
+  global_costmap:  # Global costmap node
+    ros__parameters:  # Global costmap parameters
+      update_frequency: 1.0  # Update rate, Hz
+      publish_frequency: 1.0  # Publish rate, Hz
+      global_frame: map  # Global map frame
+      robot_base_frame: base_link  # Robot body frame
+      footprint: "[[0.28, 0.18], [0.28, -0.18], [-0.28, -0.18], [-0.28, 0.18]]"  # Robot footprint
+      resolution: 0.05  # Cell size, m
+      track_unknown_space: true  # Preserve unknown cells
+      plugins: [static_layer, inflation_layer]  # Global layers
+      static_layer:  # Static map layer
+        plugin: nav2_costmap_2d::StaticLayer  # Static layer plugin
+        map_subscribe_transient_local: true  # Latch map subscription
+      inflation_layer:  # Global inflation layer
+        plugin: nav2_costmap_2d::InflationLayer  # Inflation plugin
+        cost_scaling_factor: 2.0  # Cost falloff
+        inflation_radius: 0.5  # Inflation radius, m
+      always_send_full_costmap: true  # Publish full costmap
+
+planner_server:  # Global planner server
+  ros__parameters:  # Planner parameters
+    expected_planner_frequency: 1.0  # Expected planning rate, Hz
+    planner_plugins: [GridBased]  # Planner plugin IDs
+    GridBased:  # Smac planner config
+      plugin: nav2_smac_planner/SmacPlanner2D  # Planner plugin
+      tolerance: 0.5  # Goal tolerance, m
+      downsample_costmap: false  # Use full resolution
+      downsampling_factor: 1  # Downsample factor
+      allow_unknown: true  # Allow unknown space
+      max_iterations: 1000000  # Search iteration limit
+      max_on_approach_iterations: 1000  # Near-goal limit
+      max_planning_time: 2.0  # Planning timeout, s
+      cost_travel_multiplier: 5.0  # Cost avoidance weight
+      use_final_approach_orientation: false  # Keep goal orientation separate
+      smooth_path: true  # Smooth planned path
+      smoother:  # Path smoother config
+        max_iterations: 1000  # Smoothing iterations
+        w_smooth: 0.3  # Smoothness weight
+        w_data: 0.2  # Data weight
+        tolerance: 1.0e-10  # Smoothing tolerance
+
+behavior_server:  # Recovery behavior server
+  ros__parameters:  # Behavior parameters
+    local_costmap_topic: local_costmap/costmap_raw  # Local costmap input
+    global_costmap_topic: global_costmap/costmap_raw  # Global costmap input
+    local_footprint_topic: local_costmap/published_footprint  # Local footprint input
+    global_footprint_topic: global_costmap/published_footprint  # Global footprint input
+    cycle_frequency: 10.0  # Behavior loop rate, Hz
+    behavior_plugins: [spin, backup, drive_on_heading, wait]  # Recovery plugins
+    spin:  # Spin behavior
+      plugin: nav2_behaviors/Spin  # Spin plugin
+    backup:  # Backup behavior
+      plugin: nav2_behaviors/BackUp  # Backup plugin
+    drive_on_heading:  # Drive-on-heading behavior
+      plugin: nav2_behaviors/DriveOnHeading  # Drive-on-heading plugin
+    wait:  # Wait behavior
+      plugin: nav2_behaviors/Wait  # Wait plugin
+    global_frame: odom  # Behavior global frame
+    robot_base_frame: base_link  # Robot body frame
+    transform_tolerance: 0.1  # TF tolerance, s
+    simulate_ahead_time: 2.0  # Collision check horizon, s
+
+waypoint_follower:  # Multi-waypoint executor
+  ros__parameters:  # Waypoint follower parameters
+    loop_rate: 20  # Loop rate, Hz
+    stop_on_failure: false  # Continue after waypoint failure
+    waypoint_task_executor_plugin: wait_at_waypoint  # Waypoint task plugin ID
+    wait_at_waypoint:  # Wait task config
+      plugin: nav2_waypoint_follower::WaitAtWaypoint  # Wait task plugin
+      enabled: true  # Enable wait task
+      waypoint_pause_duration: 200  # Pause duration, ms
+
+velocity_smoother:  # Command velocity smoother
+  ros__parameters:  # Smoother parameters
+    smoothing_frequency: 20.0  # Smoothing rate, Hz
+    scale_velocities: false  # Clamp axes independently
+    feedback: OPEN_LOOP  # Use command history feedback
+    max_velocity: [0.5, 0.3, 0.8]  # Max [vx, vy, wz]
+    min_velocity: [-0.2, -0.3, -0.8]  # Min [vx, vy, wz]
+    max_accel: [1.0, 1.0, 1.5]  # Max acceleration
+    max_decel: [-1.0, -1.0, -1.5]  # Max deceleration
+    odom_topic: /odom  # Odometry topic
+    odom_duration: 0.1  # Odom smoothing window, s
+    deadband_velocity: [0.0, 0.0, 0.0]  # Velocity deadband
+    velocity_timeout: 1.0  # Stop timeout, s

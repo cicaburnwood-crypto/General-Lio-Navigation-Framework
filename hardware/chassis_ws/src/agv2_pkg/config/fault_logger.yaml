@@ -1,0 +1,24 @@
+schema_version: 1
+max_segments: 24
+segment_seconds: 600
+segment_bytes: 1073741824
+max_total_bytes: 12884901888
+min_free_bytes: 10737418240
+flush_seconds: 0.2
+fsync_seconds: 1.0
+retry_seconds: 5.0
+can_queue_records: 20000
+state_queue_records: 4000
+incident_pre_seconds: 60
+incident_post_seconds: 30
+incident_extend_seconds: 120
+incident_max_count: 20
+incident_max_age_seconds: 604800
+incident_max_total_bytes: 4294967296
+incident_max_bytes: 1073741824
+startup_grace_seconds: 10
+rearm_seconds: 5
+query_period_seconds: 1.0
+query_timeout_seconds: 0.2
+query_failures: 3
+

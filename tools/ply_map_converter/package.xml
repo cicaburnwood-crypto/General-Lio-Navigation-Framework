@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ply_map_converter</name>
+  <version>0.1.0</version>
+  <description>Offline PLY map converter for 3D PCD localization maps and 2D Nav2 occupancy maps.</description>
+  <maintainer email="hit.zhangwf@gmail.com">waney</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>libpcl-all-dev</build_depend>
+  <exec_depend>libpcl-all-dev</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

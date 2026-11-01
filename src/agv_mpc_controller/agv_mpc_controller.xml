@@ -1,0 +1,10 @@
+<library path="agv_mpc_controller">
+  <class
+    name="agv_mpc_controller::MpcController"
+    type="agv_mpc_controller::MpcController"
+    base_class_type="nav2_core::Controller">
+    <description>
+      Sampling MPC local controller for omni-capable dual-steer chassis.
+    </description>
+  </class>
+</library>
