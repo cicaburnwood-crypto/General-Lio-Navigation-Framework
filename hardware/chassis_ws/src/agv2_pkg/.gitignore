@@ -1,9 +1,0 @@
-build/
-install/
-log/
-build_*/
-install_*/
-log_*/
-data/chassis_faults/
-*.db3
-*.mcap

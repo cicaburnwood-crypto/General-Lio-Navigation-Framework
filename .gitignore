@@ -34,3 +34,8 @@ id_ed25519*
 /hardware/chassis_ws/install_release_humble/
 /hardware/chassis_ws/log_release_humble/
 /hardware/chassis_ws/data/
+/.deps/
+/wheels/
+/integration/robot.env
+/integration/robot.env.before-*
+/.codex-new-al-20261119

@@ -132,7 +132,11 @@ void PubHandler::OnLivoxLidarPointCloudCallback(uint32_t handle, const uint8_t d
   packet.extrinsic_enable = false; 
   if (dev_type == LivoxLidarDeviceType::kLivoxLidarTypeIndustrialHAP) {
     packet.line_num = kLineNumberHAP;
-  } else if (dev_type == LivoxLidarDeviceType::kLivoxLidarTypeMid360||dev_type==LivoxLidarDeviceType::kLivoxLidarTypeMid360s) {
+  } else if (dev_type == LivoxLidarDeviceType::kLivoxLidarTypeMid360
+#ifdef LIVOX_SDK_HAS_MID360S
+             || dev_type == LivoxLidarDeviceType::kLivoxLidarTypeMid360s
+#endif
+  ) {
     packet.line_num = kLineNumberMid360;
   } else {
     packet.line_num = kLineNumberDefault;
@@ -326,9 +330,11 @@ void LidarPubHandler::LivoxLidarPointCloudProcess(RawPacket & pkt) {
     case kLivoxLidarSphericalCoordinateData:
       ProcessSphericalPoint(pkt);
       break;
-      case kLivoxLidarDoubleEchoData:
+#ifdef LIVOX_SDK_HAS_MID360S
+    case kLivoxLidarDoubleEchoData:
       ProcessDoubleEchoPoint(pkt);
       break;
+#endif
     default:
       std::cout << "unknown data type: " << static_cast<int>(pkt.data_type)
                 << " !!" << std::endl;
@@ -458,6 +464,7 @@ void LidarPubHandler::ProcessSphericalPoint(RawPacket& pkt) {
 }
 
 
+#ifdef LIVOX_SDK_HAS_MID360S
 void LidarPubHandler::ProcessDoubleEchoPoint(RawPacket& pkt)
 {
   LivoxLidarDoubleEchoRawPoint* raw = (LivoxLidarDoubleEchoRawPoint*)pkt.raw_data.data();
@@ -508,4 +515,5 @@ void LidarPubHandler::ProcessDoubleEchoPoint(RawPacket& pkt)
     points_clouds_.push_back(point2);
   }
 }
+#endif
 } // namespace livox_ros

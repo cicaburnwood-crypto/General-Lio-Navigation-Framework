@@ -112,7 +112,7 @@ local_costmap:
           obstacle_range: 6.0          # framework.md §6 推荐 5~8 m
           # 地面以上 5 cm 起算，避开地面点；按机器人最高点 + 余量封顶
           min_obstacle_height: 0.15
-          max_obstacle_height: 0.8
+          max_obstacle_height: 0.9
           expected_update_rate: 0.0
           observation_persistence: 0.0
           inf_is_valid: false

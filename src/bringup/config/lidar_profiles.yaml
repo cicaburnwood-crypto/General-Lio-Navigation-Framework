@@ -24,7 +24,7 @@ profiles:
     ip: 192.168.1.118
     lidar_frame: lidar_front_118
     driver_config: livox/MID360_118_config.json
-    base_to_lidar_xyz: [0.30, 0.0, 0.1]
+    base_to_lidar_xyz: [0.22, 0.0, 0.1]
     base_to_lidar_rpy: [0.0, 0.0, 0.0]
     boxes_base_link: []
 

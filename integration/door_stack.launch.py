@@ -1,8 +1,9 @@
-"""Independent Nav2 door workflow. No hardware velocity driver is started here."""
+"""AL Nav2 patrol with optional hardware input. No hardware velocity driver is started here."""
 from pathlib import Path
 from ament_index_python.packages import get_package_share_directory as share
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration as C
 from launch_ros.actions import Node
@@ -10,11 +11,11 @@ from launch_ros.actions import Node
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def include(package, file, **args):
+def include(package, file, condition=None, **args):
     # BL launches these components in separate processes. Preserve that launch
     # argument isolation here: FAST-LIO's config_file must not become the
     # adapter's config_file (which otherwise silently falls back to raw Livox).
-    return GroupAction(scoped=True, actions=[
+    return GroupAction(scoped=True, condition=condition, actions=[
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(Path(share(package))/'launch'/file)),
             launch_arguments=args.items()),
@@ -28,9 +29,9 @@ def generate_launch_description():
         DeclareLaunchArgument('lidar', default_value='front_118'),
         DeclareLaunchArgument('profile_file', default_value=str(ROOT/'src/bringup/config/lidar_profiles.yaml')),
         DeclareLaunchArgument('mission', default_value=str(ROOT/'src/patrol_manager/config/door_patrol.yaml')),
-        DeclareLaunchArgument('image_topic', default_value='/camera/d435i/color/image_raw'),
-        DeclareLaunchArgument('provider', default_value='cpu'),
-        include('bringup','sensor_stack.launch.py', lidar=C('lidar'), profile_file=C('profile_file'),
+        DeclareLaunchArgument('nav_params', default_value=str(ROOT/'src/navigation/config/nav2_mppi.yaml')),
+        DeclareLaunchArgument('enable_lidar', default_value='true'),
+        include('bringup','sensor_stack.launch.py', condition=IfCondition(C('enable_lidar')), lidar=C('lidar'), profile_file=C('profile_file'),
                 fast_lio_config_file=str(ROOT/'integration/fastlio_navigation.yaml')),
         include('bringup','adapter_fastlio_body.launch.py', lidar=C('lidar'), profile_file=C('profile_file'),
                 config_file=str(ROOT/'src/nav_interface_adapter/config/adapter_fastlio_body.yaml')),
@@ -42,8 +43,7 @@ def generate_launch_description():
         # and can connect the smoother to its own output.
         # Manager replaces only the table bridge as the sequential goal owner.
         include('navigation','nav2.launch.py', enable_task_bridge='false', enable_table_approach='false',
-                params_file=str(ROOT/'src/navigation/config/nav2_mppi.yaml')),
-        include('door_opening_server','door_opening.launch.py', image_topic=C('image_topic'), provider=C('provider')),
+                params_file=C('nav_params')),
         Node(package='patrol_manager', executable='door_patrol_manager', name='patrol_manager',
              parameters=[{'mission_file':C('mission')}], output='screen'),
     ])

@@ -20,6 +20,8 @@ _STRING_PARAMS = {
     'output_odom_topic',
     'input_cloud_topic',
     'output_cloud_topic',
+    'output_obstacle_cloud_topic',
+    'obstacle_height_frame',
     'output_scan_topic',
     'cloud_input_type',
     'output_cloud_frame',
@@ -30,6 +32,8 @@ _STRING_PARAMS = {
 }
 _BOOL_PARAMS = {'publish_tf', 'publish_lidar_tf', 'use_inf'}
 _FLOAT_PARAMS = {
+    'obstacle_min_height',
+    'obstacle_max_height',
     'min_height',
     'max_height',
     'angle_min',

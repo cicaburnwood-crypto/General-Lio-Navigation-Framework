@@ -60,6 +60,14 @@ def _launch_setup(context, *args, **kwargs):
     if len(base_to_lidar_xyz) != 3 or len(base_to_lidar_rpy) != 3:
         raise RuntimeError('base_to_lidar_xyz and base_to_lidar_rpy must have 3 values')
 
+    # The registered cloud and odometry use FAST-LIO's IMU/body frame.
+    body_xyz = _flat_numbers('base_to_fastlio_body_xyz',
+                             profile.get('base_to_fastlio_body_xyz', base_to_lidar_xyz))
+    body_rpy = _flat_numbers('base_to_fastlio_body_rpy',
+                             profile.get('base_to_fastlio_body_rpy', base_to_lidar_rpy))
+    if len(body_xyz) != 3 or len(body_rpy) != 3:
+        raise RuntimeError('base_to_fastlio_body_xyz and base_to_fastlio_body_rpy must have 3 values')
+
     adapter = Node(
         package='nav_interface_adapter',
         executable='nav_interface_adapter_node',
@@ -70,8 +78,9 @@ def _launch_setup(context, *args, **kwargs):
             {
                 'use_sim_time': _as_bool(use_sim_time),
                 'cloud_frame': cloud_frame,
-                'base_to_lidar_xyz': base_to_lidar_xyz,
-                'base_to_lidar_rpy': base_to_lidar_rpy,
+                'base_to_lidar_xyz': body_xyz,
+                'base_to_lidar_rpy': body_rpy,
+                'rebase_odom_at_startup': profile.get('rebase_odom_at_startup', False),
             },
         ],
     )

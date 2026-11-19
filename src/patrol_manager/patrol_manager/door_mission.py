@@ -1,4 +1,4 @@
-"""Door patrol schema. No ROS dependency and no guessed real-world goals."""
+"""AL patrol schema. No ROS dependency and no guessed real-world goals."""
 from dataclasses import dataclass
 import math
 from pathlib import Path
@@ -29,7 +29,7 @@ class DoorMission:
 
 def parse_mission(data):
     if not isinstance(data, dict) or data.get('frame_id') != 'map':
-        raise ValueError('Nav2 door mission frame_id must be map')
+        raise ValueError('Nav2 patrol mission frame_id must be map')
     if not isinstance(data.get('points'), list) or not data['points']:
         raise ValueError('Configure at least one waypoint')
     points = []

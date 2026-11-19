@@ -1,0 +1,36 @@
+default_lidar: hkclr_mr_2
+base_frame: base_link
+input_livox_topic: /livox/lidar
+filtered_livox_topic: /livox/lidar_filtered
+self_filter:
+  boxes_base_link:
+  - -0.25
+  - -0.35
+  - 0.1
+  - 0.25
+  - 0.35
+  - 1.45
+profiles:
+  hkclr_mr_2:
+    calibrated: true
+    ip: 192.168.1.147
+    lidar_frame: lidar_hkclr_mr_2_left_front
+    driver_config: livox/MID360_HKCLR_MR2_left_front_config.json
+    base_to_lidar_xyz:
+    - 0.2
+    - 0.16
+    - 0.1
+    base_to_lidar_rpy:
+    - -0.0523598776
+    - 0.3141592654
+    - 0.0
+    base_to_fastlio_body_xyz:
+    - 0.1964698144
+    - 0.1809490195
+    - 0.0535384581
+    base_to_fastlio_body_rpy:
+    - -0.0523598776
+    - 0.3141592654
+    - 0.0
+    rebase_odom_at_startup: true
+    boxes_base_link: []

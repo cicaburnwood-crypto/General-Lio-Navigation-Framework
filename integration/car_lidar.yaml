@@ -1,0 +1,17 @@
+# Imported from current car geometry: 30 cm square body, sensor mount pitch +20 deg.
+# base_link is floor-centre here (unlike old scan-nav's body-top reference).
+# This is a configuration transfer, NOT a new physical calibration.
+default_lidar: car_121
+base_frame: base_link
+input_livox_topic: /livox/lidar
+filtered_livox_topic: /livox/lidar_filtered
+self_filter:
+  boxes_base_link: [-0.15, -0.15, 0.0, 0.15, 0.15, 0.3]
+profiles:
+  car_121:
+    ip: 192.168.1.121
+    lidar_frame: lidar_car_121
+    driver_config: car_mid360.json
+    base_to_lidar_xyz: [0.07, 0.0, 0.347]
+    base_to_lidar_rpy: [0.0, 0.3490658504, 0.0]
+    boxes_base_link: []

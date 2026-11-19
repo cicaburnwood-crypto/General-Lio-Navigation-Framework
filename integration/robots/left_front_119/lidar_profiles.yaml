@@ -1,0 +1,26 @@
+default_lidar: left_front_119
+base_frame: base_link
+input_livox_topic: /livox/lidar
+filtered_livox_topic: /livox/lidar_filtered
+self_filter:
+  boxes_base_link:
+  - -0.25
+  - -0.35
+  - 0.1
+  - 0.25
+  - 0.35
+  - 1.45
+profiles:
+  left_front_119:
+    ip: 192.168.1.119
+    lidar_frame: lidar_left_front_119
+    driver_config: livox/MID360_119_config.json
+    base_to_lidar_xyz:
+    - 0.2
+    - 0.16
+    - 0.1
+    base_to_lidar_rpy:
+    - 0.0
+    - 0.0
+    - 0.0
+    boxes_base_link: []

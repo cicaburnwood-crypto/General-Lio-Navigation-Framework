@@ -1,5 +1,4 @@
-"""Read-only visualization + explicit manager/inspection/initialpose calls."""
-import io
+"""Read-only visualization + explicit manager and relocalization calls."""
 import json
 import math
 from pathlib import Path as FilePath
@@ -8,7 +7,6 @@ import struct
 import threading
 import time
 
-from PIL import Image as PillowImage
 import rclpy
 from nav_msgs.msg import Path, Odometry
 from nav2_msgs.action import NavigateToPose
@@ -21,26 +19,23 @@ from rcl_interfaces.msg import Log
 from chassis_localization_msgs.srv import Relocalize, IsValid
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from rclpy.time import Time
-from scan_planner_msgs.srv import DetectDoorOpening
-from sensor_msgs.msg import Image, Imu, PointCloud2
+from sensor_msgs.msg import Imu, PointCloud2
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import MarkerArray
-from door_opening_server.backend import image_to_rgb
 from fastlio_restart import restart_fastlio
 
 
 class RosBridge(Node):
-    def __init__(self, image_topic, pcd_map=None, fastlio_restart=None):
+    def __init__(self, pcd_map=None, fastlio_restart=None):
         rclpy.init()
-        super().__init__('door_gui_bridge')
+        super().__init__('al_gui_bridge')
         self.lock = threading.RLock()
-        self.detector_lock = threading.Lock()
         self.start_lock = threading.Lock()
         self.fastlio_restart = fastlio_restart or restart_fastlio
         self.lio_odom_stamp = self.lio_cloud_stamp = 0.
-        self.data, self.timestamps, self.rgb = {}, {}, None
+        self.data, self.timestamps = {}, {}
         self.pcd_map = str(pcd_map or FilePath(__file__).resolve().parents[1]/'src/bringup/maps/hkclr_office/3D/map.pcd')
         self.localization_epoch = 0
         self.localization_check = None
@@ -50,7 +45,6 @@ class RosBridge(Node):
         # Node.clients is a read-only ROS property, not application storage.
         self.patrol_clients = {s: self.create_client(Trigger, s) for s in ('/patrol/start','/patrol/cancel')}
         self.mission_parameters = self.create_client(SetParametersAtomically, '/patrol_manager/set_parameters_atomically')
-        self.detector = self.create_client(DetectDoorOpening, '/inspection/detection_door_opening')
         self.nav = ActionClient(self, NavigateToPose, '/navigate_to_pose')
         self.relocalizer = self.create_client(Relocalize, '/localizer/relocalize')
         self.localization_validator = self.create_client(IsValid, '/localizer/relocalize_check')
@@ -58,10 +52,7 @@ class RosBridge(Node):
         self.listener = TransformListener(self.tf, self)
         self.create_subscription(String, '/patrol/status', lambda m: self.on_json('patrol_status', m),
                                  QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
-        self.create_subscription(String, '/inspection/detection_door_opening/details',
-                                 lambda m: self.on_json('door_details', m), 10)
         self.create_subscription(Log, '/rosout', self.on_localization_log, 100)
-        self.create_subscription(Image, image_topic, self.on_image, qos_profile_sensor_data)
         self.create_subscription(Imu, '/livox/imu', lambda m: self.touch('imu'), qos_profile_sensor_data)
         self.create_subscription(PointCloud2, '/sensors/cloud', self.on_cloud, qos_profile_sensor_data)
         self.create_subscription(Odometry, '/Odometry', self.on_lio_odom, qos_profile_sensor_data)
@@ -218,27 +209,11 @@ class RosBridge(Node):
         except Exception:
             pass
 
-    def on_image(self, message):
-        try:
-            rgb = image_to_rgb(message)
-            output=io.BytesIO()
-            image = PillowImage.fromarray(rgb)
-            image.thumbnail((960,540))
-            image.save(output,format='JPEG',quality=80)
-            with self.lock:
-                self.rgb=output.getvalue()
-                self.timestamps['rgb']=time.monotonic()
-                self.data['rgb_error']=''
-        except Exception as exc:
-            with self.lock:
-                self.data['rgb_error']=str(exc)
-
     def snapshot(self):
         with self.lock:
             out=dict(self.data)
             out.update({key+'_age_s':round(time.monotonic()-stamp,3) for key,stamp in self.timestamps.items()})
             out['nav_ready']=self.nav.server_is_ready()
-            out['door_ready']=self.detector.service_is_ready()
             localization = dict(self.localization)
             fresh = out.get('pose_age_s') is not None and 0 <= out['pose_age_s'] <= 1.0
             localization['pose_fresh'] = fresh
@@ -248,10 +223,6 @@ class RosBridge(Node):
                 out['pose'] = None
             out['localization'] = localization
             return out
-
-    def jpeg(self):
-        with self.lock:
-            return self.rgb
 
     @staticmethod
     def wait(future, timeout):
@@ -282,21 +253,6 @@ class RosBridge(Node):
             if not reply.result.successful:
                 raise ValueError(reply.result.reason)
             return self.trigger('/patrol/start')
-
-    def detect(self):
-        with self.lock:
-            state=self.data.get('patrol_status',{}).get('state','IDLE')
-        if state not in {'IDLE','SUCCEEDED','FAILED','CANCELED'}:
-            raise ValueError('During patrol only manager calls the detector; diagnostics remain visible')
-        if not self.detector_lock.acquire(blocking=False):
-            raise ValueError('Inspection already in progress')
-        try:
-            if not self.detector.service_is_ready():
-                raise ValueError('Door detector is not running')
-            reply=self.wait(self.detector.call_async(DetectDoorOpening.Request()),60)
-            return dict(success=True,opening_percent=float(reply.opening_percent))
-        finally:
-            self.detector_lock.release()
 
     def initial_pose(self, data):
         values=[float(data.get(k,0)) for k in ('x','y','z','yaw')]

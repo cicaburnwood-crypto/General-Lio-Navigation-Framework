@@ -7,7 +7,6 @@
 - Livox ROS Driver 2：https://github.com/Livox-SDK/livox_ros_driver2 ，保留仓库 LICENSE.txt。
 - Nav2 MPPI Controller：保留源目录 LICENSE 和源代码版权。
 - scan_registration 内 fast_gicp / pclomp：保留各源文件版权。
-- Three.js：web/vendor/LICENSE.three。
-- door_opening_server 的项目元数据标记 Proprietary；模型训练采用 YOLO11x-cls。模型和训练资源的使用仍受其原授权约束。
 
-仓库初始可见性为私有。此说明不代表用户已获得第三方代码或模型的额外公开再授权。
+
+AL-2 需要现场另行安装的原生底盘 SDK（`hkclr_mobile_base`）和 Livox-SDK2。它们的二进制及底盘 SDK 源码不随此分支发布。

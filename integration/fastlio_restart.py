@@ -16,7 +16,7 @@ def owned_processes(root, proc=Path('/proc')):
             if (entry/'exe').resolve() != executable:
                 continue
             env = (entry/'environ').read_bytes().split(b'\0')
-            if b'ROS_DOMAIN_ID=76' not in env or b'AL_FASTLIO_RESPAWN=1' not in env:
+            if b'AL_FASTLIO_RESPAWN=1' not in env:
                 continue
             found.append(int(entry.name))
         except (OSError, RuntimeError):

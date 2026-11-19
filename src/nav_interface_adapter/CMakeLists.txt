@@ -16,6 +16,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_sensor_msgs REQUIRED)
 
 add_executable(nav_interface_adapter_node src/nav_interface_adapter_node.cpp)
+target_include_directories(nav_interface_adapter_node PRIVATE include)
 ament_target_dependencies(nav_interface_adapter_node
   geometry_msgs
   livox_ros_driver2
@@ -35,5 +36,12 @@ install(
   DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_obstacle_height_filter test/test_obstacle_height_filter.cpp)
+  target_include_directories(test_obstacle_height_filter PRIVATE include)
+  ament_target_dependencies(test_obstacle_height_filter sensor_msgs tf2)
+endif()
 
 ament_package()

@@ -1,33 +1,9 @@
-import {Map2D} from './map_2d.js?v=20261028rb1';
-import {createPatrolEditor} from './door_patrol.js?v=20261028rb1';
+import {Map2D} from './map_2d.js?v=20261119wait';
+import {createPatrolEditor} from './door_patrol.js?v=20261119wait';
 
 const $=id=>document.getElementById(id);
 let state=null,activeTab='patrol',pointTab='patrol',busy=false,refreshing=false,mapKey='',loadingMap=false,navigating=false;
 const events=[];
-let recordingBusy=false;
-async function record(action){
-  if(recordingBusy)return;recordingBusy=true;
-  try{
-    const response=await fetch(`/api/recording/${action}`,{method:'POST',headers:{'X-Scan-Nav':'operator'}});
-    const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'录像操作失败');
-    message(action==='start'?'正在录制原生 RGB':'正在封装录像，完成后自动传回本机');
-    await refresh();
-  }catch(e){message(String(e),true)}finally{recordingBusy=false}
-}
-$('rgb-record-start').onclick=()=>record('start');
-$('rgb-record-stop').onclick=()=>record('stop');
-function showRecording(r={}){
-  $('rgb-record-start').disabled=recordingBusy||!r.online||['recording','finalizing'].includes(r.state);
-  $('rgb-record-stop').disabled=recordingBusy||!r.online||r.state!=='recording';
-  let text={idle:'未录制',offline:'相机录像模块离线',recording:'录制中',finalizing:'正在封装 MP4',complete:'录制完成，等待传回本机',error:'录像失败'}[r.state]||'等待相机';
-  if(r.state==='recording'||r.state==='finalizing')text+=` · ${r.width}×${r.height} · ${(r.duration_s||0).toFixed(1)} 秒 · ${r.frames||0} 帧`;
-  if(r.dropped)text+=` · 编码丢帧 ${r.dropped}`;
-  if(r.error)text+=` · ${r.error}`;
-  if(r.transfer==='received')text=`已传回本机：${r.local_path}`;
-  $('rgb-record-status').textContent=text;
-  const link=$('rgb-record-download');link.hidden=r.state!=='complete';
-  if(r.state==='complete'){link.href=`/api/recordings/${encodeURIComponent(r.name)}`;link.download=r.name;link.textContent=`下载 ${r.name}`}
-}
 function message(text,bad=false){$('message').textContent=text;$('message').classList.toggle('error-text',bad)}
 function log(text){events.unshift(`${new Date().toLocaleTimeString()} · ${text}`);events.splice(20);$('event-log').replaceChildren(...events.map(t=>{const e=document.createElement('div');e.textContent=t;return e}))}
 function mode(tool,selected=0,append=false){
@@ -101,17 +77,16 @@ async function action(name,more={}){
 }
 function check(label,ok){const e=document.createElement('div');e.className=`check ${ok?'ok':''}`;e.textContent=`${ok?'✓':'×'} ${label}`;return e}
 function update(d){
-  showRecording(d.recording);
   for(const item of [editor,liveEditor]){item.setMap(d.map);item.updateRuntime(d)}map.update(d);
   $('map-badge').textContent=`地图 ${d.map}`;
   $('sensor-badge').textContent=d.lidar_age_s!=null&&d.lidar_age_s<1?'雷达在线':'等待雷达';
   $('state-pill').textContent=d.preview?'离线预览':d.patrol_status?.state||'等待 manager';
   $('pose').textContent=map.validPose()?`X ${d.pose[0].toFixed(3)} m · Y ${d.pose[1].toFixed(3)} m · Yaw ${(d.pose[3]*180/Math.PI).toFixed(1)}°`:'等待 map → base_link';
-  $('ages').textContent=`RGB ${d.rgb_age_s??'—'} s · 定位 ${d.pose_age_s??'—'} s`;
-  $('checks').replaceChildren(check('Nav2 Action',d.nav_ready),check('Patrol manager',!!d.patrol_status),check('RGB 门检测服务',d.door_ready),check('2D 地图',!!map.grid));
-  $('next-step').textContent='蓝点到达即继续，红点停稳并检测门后才继续。巡检任务可保存 YAML；实时模式选点后确认执行，不保存文件。两种模式均由同一个 manager 顺序发送目标。';
+  $('ages').textContent=`点云 ${d.cloud_age_s??'—'} s · 定位 ${d.pose_age_s??'—'} s`;
+  $('checks').replaceChildren(check('Nav2 Action',d.nav_ready),check('Patrol manager',!!d.patrol_status),check('2D 地图',!!map.grid));
+  $('next-step').textContent='蓝点到达即继续，红点到达后等待 10 秒再继续。巡检任务可保存 YAML；实时模式选点后确认执行，不保存文件。两种模式均由同一个 manager 顺序发送目标。';
   const caps=d.navigation_caps||{};
-  $('caps-summary').textContent=`AL / BL 同款 MPPI：vx ${caps.max_vx_mps??'—'} m/s · vy ${caps.max_vy_mps??'—'} m/s · wz ${caps.max_wz_radps??'—'} rad/s。下游底盘限制保持原样。`;
+  $('caps-summary').textContent=`全向 MPPI：vx ${caps.max_vx_mps??'—'} m/s · vy ${caps.max_vy_mps??'—'} m/s · wz ${caps.max_wz_radps??'—'} rad/s。下游底盘限制保持原样。`;
   $('localization-state').textContent=map.validPose()?`${$('pose').textContent} · Z ${d.pose[2].toFixed(3)} m · 数据年龄 ${d.pose_age_s??'—'} s`:'等待 map → base_link';
   const loc=d.localization||{},align=loc.alignment;
   const labels={CHECKING:'正在读取原定位模块状态',RESTARTING:'正在重启 FAST-LIO，清除上一会话状态',WAITING_LIO:'等待 FAST-LIO 新里程计与点云',SUBMITTING:'正在提交参考位姿',MATCHING:'等待粗配准 / 精配准成功；参考点不是最终位置',LOCALIZED:'原定位模块已建立定位',ERROR:'定位请求失败',UNKNOWN:'定位请求结果未知，请检查原服务'};

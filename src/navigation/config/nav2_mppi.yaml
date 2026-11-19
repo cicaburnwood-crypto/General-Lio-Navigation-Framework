@@ -114,7 +114,7 @@ local_costmap:  # Rolling local costmap
       width: 6  # Costmap width, m
       height: 6  # Costmap height, m
       resolution: 0.05  # Cell size, m
-      footprint: "[[0.28, 0.18], [0.28, -0.18], [-0.28, -0.18], [-0.28, 0.18]]"  # Robot footprint
+      footprint: "[[0.28, 0.25], [0.28, -0.25], [-0.28, -0.25], [-0.28, 0.25]]"  # Robot footprint
       plugins: [voxel_layer, inflation_layer]  # Local layers
       voxel_layer:  # 3D obstacle layer
         plugin: spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer  # Voxel plugin
@@ -134,16 +134,14 @@ local_costmap:  # Rolling local costmap
         observation_sources: pointcloud  # Observation source list
         pointcloud:  # Point cloud source
           data_type: PointCloud2  # Sensor message type
-          topic: /sensors/cloud  # Adapted cloud topic
+          topic: /sensors/obstacle_cloud  # Base-relative height, along map Z
           marking: true  # Mark obstacles
           clearing: true  # Clear free space
           obstacle_range: 6.0  # Max obstacle range, m
-          min_obstacle_height: 0.15  # Floor filter, m
-          max_obstacle_height: 0.8  # Upper obstacle filter, m
           expected_update_rate: 0.0  # No rate enforcement
           observation_persistence: 0.0  # Do not persist observations
           inf_is_valid: false  # Ignore infinite readings
-          voxel_filter: true  # Filter cloud into voxels
+          filter: "none"  # Already height-filtered by adapter; no odom-Z clipping
       inflation_layer:  # Local inflation layer
         plugin: nav2_costmap_2d::InflationLayer  # Inflation plugin
         cost_scaling_factor: 2.0  # Cost falloff
@@ -157,7 +155,7 @@ global_costmap:  # Planner costmap
       publish_frequency: 1.0  # Publish rate, Hz
       global_frame: map  # Global map frame
       robot_base_frame: base_link  # Robot body frame
-      footprint: "[[0.28, 0.18], [0.28, -0.18], [-0.28, -0.18], [-0.28, 0.18]]"  # Robot footprint
+      footprint: "[[0.28, 0.25], [0.28, -0.25], [-0.28, -0.25], [-0.28, 0.25]]"  # Robot footprint
       resolution: 0.05  # Cell size, m
       track_unknown_space: true  # Preserve unknown cells
       plugins: [static_layer, inflation_layer]  # Global layers

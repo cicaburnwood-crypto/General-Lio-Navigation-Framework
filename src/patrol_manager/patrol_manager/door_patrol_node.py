@@ -1,8 +1,4 @@
-"""Nav2 adaptation of patrol_manager: this manager alone dispatches the queue.
-
-No velocity publisher. Nav2 owns stopping and goal orientation; measured odometry
-and map TF confirm the stop before the existing door service is invoked.
-"""
+"""AL Nav2 patrol manager with a timed stop at red waypoints."""
 import json
 import math
 import time
@@ -10,24 +6,21 @@ import time
 import rclpy
 from action_msgs.msg import GoalStatus
 from nav2_msgs.action import NavigateToPose
-from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rcl_interfaces.msg import SetParametersResult
 from rcl_interfaces.srv import SetParametersAtomically
-from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from rclpy.time import Time
-from scan_planner_msgs.srv import DetectDoorOpening
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformListener
 
 from .door_mission import load_mission, parse_mission
-from .door_gate import DoorGate
-from .odom_motion import OdomMotion
 
+RED_WAIT_SECONDS = 10.0
 TERMINAL = {'IDLE', 'SUCCEEDED', 'FAILED', 'CANCELED'}
 
 
@@ -47,22 +40,17 @@ class DoorPatrolManager(Node):
         self.tolerance_future = None
         name = self.declare_parameter('navigation_action', '/navigate_to_pose').value
         self.client = ActionClient(self, NavigateToPose, name)
-        self.door_client = self.create_client(DetectDoorOpening, '/inspection/detection_door_opening')
         self.publisher = self.create_publisher(String, '/patrol/status',
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_service(Trigger, '/patrol/start', self.start)
         self.create_service(Trigger, '/patrol/cancel', self.cancel)
         self.tf = Buffer()
         self.listener = TransformListener(self.tf, self)
-        self.create_subscription(Odometry, '/odom', self.on_odom, qos_profile_sensor_data)
         self.state, self.reason, self.index = 'IDLE', 'Configure red / blue waypoints', 0
         self.task_mode = 'patrol'
-        self.door_calls_completed = 0
-        self.stop_diagnostics = {}
-        self.mission = self.gate = None
-        self.odom_motion = OdomMotion()
+        self.mission = None
+        self.red_wait_until = None
         self.goal_future = self.goal_handle = self.result_future = self.cancel_future = None
-        self.door_future = None
         self.cancel_requested = False
         self.timed_out = False
         self.goal_started = 0.0
@@ -72,17 +60,13 @@ class DoorPatrolManager(Node):
         self.publish_status()
 
     def publish_status(self):
-        gate = self.gate
         value = dict(state=self.state, reason=self.reason, point_index=self.index,
             task_mode=self.task_mode,
             points=[dict(name=p.name, type=p.type, position=p.position, yaw=p.yaw)
                     for p in self.mission.points] if self.mission else [],
             navigation=self.navigation_feedback,
-            door=dict(calls=self.door_calls_completed + (gate.calls if gate else 0),
-                      in_flight=bool(gate and gate.in_flight),
-                      opening_percent=gate.last_opening if gate else None,
-                      position_latched=bool(gate and gate.position_reached),
-                      settling=self.stop_diagnostics),
+            wait_remaining_sec=round(max(0.0, self.red_wait_until - time.monotonic()), 2)
+                if self.red_wait_until is not None else None,
             point_count=len(self.mission.points) if self.mission else 0)
         self.publisher.publish(String(data=json.dumps(value, ensure_ascii=False, allow_nan=False)))
 
@@ -90,7 +74,7 @@ class DoorPatrolManager(Node):
         for parameter in parameters:
             if parameter.name != 'runtime_mission_json':
                 continue
-            if self.state not in TERMINAL or self.door_future is not None:
+            if self.state not in TERMINAL:
                 return SetParametersResult(successful=False, reason='Manager already has an active task')
             if not isinstance(parameter.value, str):
                 return SetParametersResult(successful=False, reason='runtime_mission_json must be a string')
@@ -113,9 +97,9 @@ class DoorPatrolManager(Node):
 
     def start(self, request, response):
         del request
-        if self.state not in TERMINAL or self.door_future is not None or self.tolerance_future is not None:
+        if self.state not in TERMINAL or self.tolerance_future is not None:
             response.success = False
-            response.message = 'Task active or previous detector request still completing'
+            response.message = 'Task active or previous Nav2 request still completing'
             return response
         try:
             staged = self.get_parameter('runtime_mission_json').value
@@ -130,11 +114,9 @@ class DoorPatrolManager(Node):
         except Exception as exc:
             response.success, response.message = False, str(exc)
             return response
-        self.mission, self.gate = mission, None
+        self.mission = mission
+        self.red_wait_until = None
         self.task_mode = 'realtime' if staged else 'patrol'
-        self.door_calls_completed = 0
-        self.stop_diagnostics = {}
-        self.odom_motion = OdomMotion()
         self.goal_future = self.goal_handle = self.result_future = self.cancel_future = None
         self.index, self.cancel_requested, self.timed_out = 0, False, False
         self.navigation_feedback = {}
@@ -149,6 +131,7 @@ class DoorPatrolManager(Node):
             response.success, response.message = False, 'No active task'
             return response
         self.cancel_requested = True
+        self.red_wait_until = None
         if self.goal_future is None and self.goal_handle is None:
             self.state, self.reason = 'CANCELED', 'Queue canceled; no next goal will be sent'
         else:
@@ -162,43 +145,6 @@ class DoorPatrolManager(Node):
         distance = float(f.distance_remaining)
         self.navigation_feedback = dict(distance_remaining=distance if math.isfinite(distance) else None,
                                         number_of_recoveries=int(f.number_of_recoveries))
-
-    def on_odom(self, message):
-        if self.state not in {'SETTLING', 'WAITING_DOOR', 'DETECTING'} or not self.gate:
-            return
-        # Receipt alone is not enough: reject buffered/old odometry and map TF.
-        now = self.get_clock().now().nanoseconds
-        stamp = message.header.stamp.sec*10**9+message.header.stamp.nanosec
-        if stamp == 0 or not 0 <= (now-stamp)/1e9 <= self.mission.observation_max_age_sec:
-            return
-        try:
-            transform = self.tf.lookup_transform('map', self.get_parameter('base_frame').value, Time())
-        except Exception:
-            return
-        ts = transform.header.stamp.sec*10**9+transform.header.stamp.nanosec
-        if ts == 0 or not 0 <= (now-ts)/1e9 <= self.mission.observation_max_age_sec:
-            return
-        p, q = transform.transform.translation, transform.transform.rotation
-        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
-        v = message.twist.twist
-        op, oq = message.pose.pose.position, message.pose.pose.orientation
-        norm = math.sqrt(sum(value*value for value in (oq.x, oq.y, oq.z, oq.w)))
-        if not math.isfinite(norm) or norm < .5:
-            return
-        x, y, z, w = (value/norm for value in (oq.x, oq.y, oq.z, oq.w))
-        oyaw = math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
-        measured = self.odom_motion.observe(stamp/1e9,
-            (message.header.frame_id, message.child_frame_id), (op.x, op.y, oyaw),
-            (v.linear.x, v.linear.y, v.angular.z), self.mission.observation_max_age_sec)
-        if measured is not None:
-            self.gate.observe(time.monotonic(), (p.x, p.y, yaw), measured)
-            target_yaw = self.mission.points[self.index].yaw
-            yaw_error = abs(math.atan2(math.sin(yaw-target_yaw), math.cos(yaw-target_yaw)))
-            self.stop_diagnostics = dict(source='odom_pose_1s_window_and_reported_twist',
-                linear_mps=measured[0], angular_radps=measured[2], yaw_error_rad=yaw_error)
-        else:
-            self.stop_diagnostics = dict(source='odom_pose_1s_window_and_reported_twist',
-                waiting_for_window=True)
 
     def dispatch(self):
         p = self.mission.points[self.index]
@@ -225,10 +171,7 @@ class DoorPatrolManager(Node):
         self.state, self.reason = 'CONFIGURING_GOAL', f'Applying native Nav2 tolerance for {p.type} point'
 
     def advance(self):
-        if self.gate:
-            self.door_calls_completed += self.gate.calls
-            self.gate = None
-        self.stop_diagnostics = {}
+        self.red_wait_until = None
         self.index += 1
         if self.index < len(self.mission.points):
             self.state, self.reason = 'WAITING_FOR_SERVER', 'Preparing next waypoint'
@@ -237,11 +180,6 @@ class DoorPatrolManager(Node):
 
     def tick(self):
         now = time.monotonic()
-        # A canceled service cannot be remotely canceled: drain, never reuse it.
-        if self.state in TERMINAL and self.door_future is not None and self.door_future.done():
-            self.door_future = None
-            if self.gate:
-                self.gate.in_flight = False
         if (self.state == 'WAITING_FOR_SERVER' and self.client.server_is_ready()
                 and self.tolerance_client.service_is_ready()):
             self.configure_goal_tolerance()
@@ -295,34 +233,12 @@ class DoorPatrolManager(Node):
             elif status != GoalStatus.STATUS_SUCCEEDED:
                 self.state, self.reason = 'FAILED', f'Nav2 failed: status={status}'
             elif self.mission.points[self.index].type == 'red':
-                self.gate = DoorGate(self.mission, self.index, navigation_succeeded=True)
-                self.odom_motion = OdomMotion()
-                self.state, self.reason = 'SETTLING', 'Door-front goal reached; waiting for measured standstill and heading'
+                self.red_wait_until = time.monotonic() + RED_WAIT_SECONDS
+                self.state, self.reason = 'WAITING_RED', 'Red waypoint reached'
             else:
-                # Blue waypoints do not wait, settle, or call the detector.
                 self.advance()
-        if self.state in {'SETTLING', 'WAITING_DOOR', 'DETECTING'}:
-            settled = self.gate.settled(now)
-            if self.door_future is not None and self.door_future.done():
-                try:
-                    opening = float(self.door_future.result().opening_percent)
-                except Exception as exc:
-                    opening = 0.0
-                    self.reason = f'Detector error; staying stopped: {exc}'
-                self.door_future = None
-                if self.gate.finish(now, opening):
-                    self.reason = 'Door fully open (100); manager releases next waypoint'
-                    self.advance()
-                else:
-                    self.state = 'WAITING_DOOR' if settled else 'SETTLING'
-                    self.reason = 'Door detection did not succeed; waiting for next detection'
-            elif self.door_future is None:
-                self.state = 'WAITING_DOOR' if settled else 'SETTLING'
-                if self.door_client.service_is_ready() and self.gate.begin(now):
-                    self.door_future = self.door_client.call_async(DetectDoorOpening.Request())
-                    self.state, self.reason = 'DETECTING', 'Capturing 1 s / averaging 1..5 fresh RGB frames'
-                elif settled and not self.door_client.service_is_ready():
-                    self.reason = 'Waiting stopped for door detection service'
+        if self.state == 'WAITING_RED' and now >= self.red_wait_until:
+            self.advance()
         self.publish_status()
 
 

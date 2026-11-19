@@ -279,6 +279,22 @@ else(ROS_EDITION STREQUAL "ROS2")
     src/call_back/livox_lidar_callback.cpp
   )
 
+  # MID360 uses the V1.2.x SDK on these robots. Enable newer packet types
+  # only when the selected SDK actually provides them.
+  include(CheckCXXSourceCompiles)
+  set(CMAKE_REQUIRED_INCLUDES "${LIVOX_LIDAR_SDK_INCLUDE_DIR}")
+  check_cxx_source_compiles("#include <livox_lidar_api.h>
+    int main() {
+      auto device = LivoxLidarDeviceType::kLivoxLidarTypeMid360s;
+      auto format = kLivoxLidarDoubleEchoData;
+      LivoxLidarDoubleEchoRawPoint point{};
+      (void)device; (void)format; (void)point;
+    }" LIVOX_SDK_HAS_MID360S)
+  unset(CMAKE_REQUIRED_INCLUDES)
+  if(LIVOX_SDK_HAS_MID360S)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE LIVOX_SDK_HAS_MID360S)
+  endif()
+
   target_include_directories(${PROJECT_NAME} PRIVATE ${livox_sdk_INCLUDE_DIRS})
 
   # get include directories of custom msg headers

@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import hashlib
 import io
-import json
 import math
 import os
 from pathlib import Path
@@ -14,7 +13,6 @@ import time
 from aiohttp import web
 from PIL import Image
 import yaml
-from rgb_recording import RecordingControl, atomic_json
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'src/patrol_manager'))
@@ -73,7 +71,7 @@ def create_app(args, bridge=None):
     map_name = map_file.stem
     points = map_points(map_file)
     grid, grid_png = map_grid(map_file)
-    nav_config = yaml.safe_load((ROOT/'src/navigation/config/nav2_mppi.yaml').read_text())
+    nav_config = yaml.safe_load(Path(args.nav_params).read_text())
     controller = nav_config['controller_server']['ros__parameters']['FollowPath']
     navigation_caps = dict(max_vx_mps=controller['vx_max'], max_vy_mps=controller['vy_max'],
                            max_wz_radps=controller['wz_max'])
@@ -81,7 +79,6 @@ def create_app(args, bridge=None):
     if isinstance(footprint, str):
         footprint = yaml.safe_load(footprint)
     save_lock = asyncio.Lock()
-    recorder = RecordingControl(ROOT/'recordings/rgb')
 
     @web.middleware
     async def errors(request, handler):
@@ -106,21 +103,19 @@ def create_app(args, bridge=None):
             armed=active, control='manager' if active else 'none', error='',
             processes={'localization':bool(d.get('pose')), 'init':False, 'mapping':False,
                        'global':False, 'planner':d.get('nav_ready',False), 'base':False, 'patrol':native is not None},
-            patrol_startup=dict(state='READY' if native else 'OFFLINE', stage='Nav2 + manager + RGB door'),
-            patrol_status=native, door_details=d.get('door_details'), door_ready=d.get('door_ready',False),
+            patrol_startup=dict(state='READY' if native else 'OFFLINE', stage='Nav2 + manager'),
+            patrol_status=native,
             nav_ready=d.get('nav_ready',False),
             lidar_age_s=None, imu_age_s=None, cloud_age_s=None, pose_age_s=None, pose=None, pose_frame='map',
-            rgb_age_s=None, rgb_error='No RGB topic received',
             raw_points=[], world_points=[], global_path=[], local_path=[],
             raw_revision=0, world_revision=0, global_revision=0, local_revision=0,
             active_waypoint_index=None, active_waypoint_total=None, active_waypoint=None,
             waypoint_mtime_ns=mission.stat().st_mtime_ns, map_saved=True, tiles_saved=False,
             tomogram_current=False, tomogram_available=False, terrain_worker_age_s=None, terrain_job=None,
             relocalization_ready=False, relocalization_started=False, pose_file_path=None,
-            recording=dict(active=False), sensor_recovery='offline',
+            sensor_recovery='offline',
             navigation_caps=navigation_caps, robot_footprint=footprint, deployment='AL')
         out.update(d)
-        out['recording'] = recorder.status()
         return web.json_response(out)
 
     async def settings(request):
@@ -163,10 +158,8 @@ def create_app(args, bridge=None):
             result = await asyncio.to_thread(bridge.trigger, '/patrol/cancel')
         elif name == 'relocalize':
             result = await asyncio.to_thread(bridge.initial_pose, body)
-        elif name == 'detect_door':
-            result = await asyncio.to_thread(bridge.detect)
         else:
-            raise ValueError('Not a Nav2 door workflow operation; no SCAN/PCT command was sent')
+            raise ValueError('Unsupported AL navigation operation')
         if not result['success']:
             raise ValueError(result.get('message', 'Operation failed'))
         return web.json_response(dict(ok=True, result=result))
@@ -176,53 +169,8 @@ def create_app(args, bridge=None):
         pts = [p['position'] for p in value['points'] if all(isinstance(v, (float,int)) for v in p['position'])]
         return web.json_response(dict(waypoints=pts, mtime_ns=mission.stat().st_mtime_ns))
 
-    async def rgb(request):
-        if bridge is None:
-            raise web.HTTPServiceUnavailable(text='Offline preview: no camera')
-        data = bridge.jpeg()
-        if data is None:
-            raise web.HTTPServiceUnavailable(text='Waiting for RGB')
-        return web.Response(body=data, content_type='image/jpeg', headers={'Cache-Control':'no-store'})
-
-    async def rgb_stream(request):
-        if bridge is None:
-            raise web.HTTPServiceUnavailable(text='Offline preview: no camera')
-        response = web.StreamResponse(headers={'Content-Type':'multipart/x-mixed-replace; boundary=frame', 'Cache-Control':'no-store'})
-        await response.prepare(request)
-        try:
-            while True:
-                data = bridge.jpeg()
-                if data:
-                    await response.write(b'--frame\r\nContent-Type: image/jpeg\r\n\r\n'+data+b'\r\n')
-                await asyncio.sleep(.15)
-        except (ConnectionError, asyncio.CancelledError):
-            return response
-
     async def index(request):
         return web.FileResponse(ROOT/'web/index_2d.html', headers={'Cache-Control':'no-store'})
-
-    async def recording_command(request):
-        if bridge is None:
-            raise ValueError('Offline preview: no camera recording')
-        result = await asyncio.to_thread(recorder.command, request.match_info['action'])
-        return web.json_response(result)
-
-    async def recordings(request):
-        return web.json_response(dict(recordings=recorder.recordings()),headers={'Cache-Control':'no-store'})
-
-    async def recording_file(request):
-        path=recorder.file(request.match_info['name'])
-        return web.FileResponse(path,headers={'Content-Disposition':f'attachment; filename="{path.name}"'})
-
-    async def recording_received(request):
-        path=recorder.file(request.match_info['name'])
-        body=await request.json()
-        metadata=json.loads(path.with_suffix('.json').read_text())
-        if body.get('sha256')!=metadata['sha256'] or not body.get('local_path'):
-            raise ValueError('录像传输校验不匹配')
-        atomic_json(path.with_name(path.name+'.received.json'),dict(local_path=str(body['local_path']),
-                    sha256=body['sha256'],received_at=time.time()))
-        return web.json_response(dict(ok=True))
 
     async def cloud(request):
         return web.json_response(points)
@@ -249,12 +197,6 @@ def create_app(args, bridge=None):
     app.router.add_get('/api/settings', settings)
     app.router.add_post('/api/settings', settings)
     app.router.add_post('/api/action', action)
-    app.router.add_get('/api/rgb.jpg', rgb)
-    app.router.add_get('/api/rgb.mjpeg', rgb_stream)
-    app.router.add_post('/api/recording/{action}', recording_command)
-    app.router.add_get('/api/recordings', recordings)
-    app.router.add_get('/api/recordings/{name}', recording_file)
-    app.router.add_post('/api/recordings/{name}/received', recording_received)
     app.router.add_static('/static', ROOT/'web')
     return app
 
@@ -264,15 +206,15 @@ def main():
     ap.add_argument('--ros', action='store_true', help='Connect only to the selected ROS_DOMAIN_ID')
     ap.add_argument('--port', type=int, default=8092)
     ap.add_argument('--host', default='127.0.0.1')
-    ap.add_argument('--image-topic', default='/camera/d435i/color/image_raw')
     ap.add_argument('--mission', default=str(ROOT/'src/patrol_manager/config/door_patrol.yaml'))
     ap.add_argument('--map', default=str(ROOT/'src/bringup/maps/hkclr_office/2D/hkclr_office_2d.yaml'))
     ap.add_argument('--pcd-map', default=str(ROOT/'src/bringup/maps/hkclr_office/3D/map.pcd'))
+    ap.add_argument('--nav-params', default=str(ROOT/'src/navigation/config/nav2_mppi.yaml'))
     args = ap.parse_args()
     bridge = None
     if args.ros:
         from ros_bridge import RosBridge
-        bridge = RosBridge(args.image_topic, args.pcd_map)
+        bridge = RosBridge(args.pcd_map)
     try:
         web.run_app(create_app(args, bridge), host=args.host, port=args.port)
     finally:

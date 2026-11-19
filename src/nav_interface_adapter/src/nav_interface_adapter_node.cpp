@@ -11,6 +11,7 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "livox_ros_driver2/msg/custom_msg.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "nav_interface_adapter/obstacle_height_filter.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
@@ -159,6 +160,11 @@ public:
     output_odom_topic_ = declare_parameter<std::string>("output_odom_topic", "/odom");
     input_cloud_topic_ = declare_parameter<std::string>("input_cloud_topic", "/livox/lidar");
     output_cloud_topic_ = declare_parameter<std::string>("output_cloud_topic", "/sensors/cloud");
+    output_obstacle_cloud_topic_ = declare_parameter<std::string>(
+      "output_obstacle_cloud_topic", "/sensors/obstacle_cloud");
+    obstacle_height_frame_ = declare_parameter<std::string>("obstacle_height_frame", "map");
+    obstacle_min_height_ = declare_parameter<double>("obstacle_min_height", 0.0);
+    obstacle_max_height_ = declare_parameter<double>("obstacle_max_height", 0.8);
     output_scan_topic_ = declare_parameter<std::string>("output_scan_topic", "/scan");
     cloud_input_type_ = declare_parameter<std::string>("cloud_input_type", kLivoxCustomMode);
     output_cloud_frame_ = declare_parameter<std::string>("output_cloud_frame", "");
@@ -167,6 +173,7 @@ public:
     cloud_frame_ = declare_parameter<std::string>("cloud_frame", "livox_frame");
     scan_target_frame_ = declare_parameter<std::string>("scan_target_frame", "base_link");
     publish_tf_ = declare_parameter<bool>("publish_tf", true);
+    rebase_odom_at_startup_ = declare_parameter<bool>("rebase_odom_at_startup", false);
     publish_lidar_tf_ = declare_parameter<bool>("publish_lidar_tf", true);
     base_to_lidar_xyz_ =
       declare_parameter<std::vector<double>>("base_to_lidar_xyz", {0.0, 0.0, 0.0});
@@ -191,6 +198,8 @@ public:
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>(output_odom_topic_, 20);
     cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
       output_cloud_topic_, rclcpp::SensorDataQoS());
+    obstacle_cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      output_obstacle_cloud_topic_, rclcpp::SensorDataQoS());
     scan_pub_ = create_publisher<sensor_msgs::msg::LaserScan>(output_scan_topic_, 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
     static_tf_broadcaster_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(*this);
@@ -226,6 +235,16 @@ public:
 private:
   void validate_parameters() const
   {
+    if (base_frame_.empty() || obstacle_height_frame_.empty() ||
+      output_obstacle_cloud_topic_.empty() || output_obstacle_cloud_topic_ == output_cloud_topic_)
+    {
+      throw std::invalid_argument("obstacle frames and a separate obstacle cloud topic are required");
+    }
+    if (!std::isfinite(obstacle_min_height_) || !std::isfinite(obstacle_max_height_) ||
+      obstacle_max_height_ < obstacle_min_height_)
+    {
+      throw std::invalid_argument("obstacle height bounds must be finite and ordered");
+    }
     if (angle_increment_ <= 0.0) {
       throw std::invalid_argument("angle_increment must be positive");
     }
@@ -254,7 +273,14 @@ private:
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
   {
     auto odom = *msg;
-    const auto odom_to_base = pose_to_transform(msg->pose.pose) * lidar_to_base_tf_;
+    const auto source_odom_to_base = pose_to_transform(msg->pose.pose) * lidar_to_base_tf_;
+    if (rebase_odom_at_startup_ && !odom_rebase_initialized_) {
+      odom_rebase_tf_ = source_odom_to_base.inverse();
+      odom_rebase_initialized_ = true;
+      RCLCPP_INFO(get_logger(), "Rebased output odom frame to the first converted base_link pose");
+    }
+    const auto odom_to_base = rebase_odom_at_startup_ ?
+      odom_rebase_tf_ * source_odom_to_base : source_odom_to_base;
     odom.header.frame_id = odom_frame_;
     odom.child_frame_id = base_frame_;
     set_pose(odom.pose.pose, odom_to_base);
@@ -333,6 +359,8 @@ private:
     }
 
     cloud_pub_->publish(output_cloud);
+    // Keep the complete cloud available for localization, even before map TF exists.
+    publish_obstacle_cloud(output_cloud);
     auto scan_cloud = output_cloud;
 
     if (!transform_cloud_to_frame(
@@ -342,6 +370,36 @@ private:
     }
 
     scan_pub_->publish(project_cloud_to_scan(scan_cloud));
+  }
+
+  void publish_obstacle_cloud(const sensor_msgs::msg::PointCloud2 & cloud)
+  {
+    sensor_msgs::msg::PointCloud2 base_cloud;
+    if (!transform_cloud_to_frame(cloud, base_frame_, base_cloud, "obstacle height filtering")) {
+      return;
+    }
+    try {
+      tf2::Matrix3x3 height_from_base;
+      height_from_base.setIdentity();
+      if (obstacle_height_frame_ != base_frame_) {
+        const auto transform = tf_buffer_.lookupTransform(
+          obstacle_height_frame_, base_frame_, base_cloud.header.stamp,
+          rclcpp::Duration::from_seconds(std::max(0.0, transform_tolerance_)));
+        const auto & q = transform.transform.rotation;
+        // Deliberately ignore translation: the height origin is always base_link.
+        height_from_base.setRotation(tf2::Quaternion(q.x, q.y, q.z, q.w));
+      }
+      obstacle_cloud_pub_->publish(nav_interface_adapter::filter_obstacle_height(
+          base_cloud, height_from_base, obstacle_min_height_, obstacle_max_height_));
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "Skipping obstacle cloud: cannot get %s <- %s rotation at cloud time: %s",
+        obstacle_height_frame_.c_str(), base_frame_.c_str(), ex.what());
+    } catch (const std::invalid_argument & ex) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000, "Skipping malformed obstacle cloud: %s", ex.what());
+    }
   }
 
   bool transform_cloud_to_frame(
@@ -449,6 +507,10 @@ private:
   std::string output_odom_topic_;
   std::string input_cloud_topic_;
   std::string output_cloud_topic_;
+  std::string output_obstacle_cloud_topic_;
+  std::string obstacle_height_frame_;
+  double obstacle_min_height_{0.0};
+  double obstacle_max_height_{0.8};
   std::string output_scan_topic_;
   std::string cloud_input_type_;
   std::string output_cloud_frame_;
@@ -471,11 +533,15 @@ private:
   bool use_inf_{true};
   double inf_epsilon_{1.0};
   double transform_tolerance_{0.05};
+  bool rebase_odom_at_startup_{false};
+  bool odom_rebase_initialized_{false};
+  tf2::Transform odom_rebase_tf_;
   tf2::Transform base_to_lidar_tf_;
   tf2::Transform lidar_to_base_tf_;
 
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr obstacle_cloud_pub_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr scan_pub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub_;
